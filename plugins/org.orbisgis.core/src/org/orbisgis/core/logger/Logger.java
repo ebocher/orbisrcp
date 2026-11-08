@@ -25,21 +25,23 @@ import org.orbisgis.core.CoreActivator;
 
 public class Logger implements ILogger {
 
-    private static ILog eclipseLog;
+    private final String id;
 
-    private String id;
-
-    static {
-        CoreActivator instance = CoreActivator.getInstance();
-        try {
-            eclipseLog = instance == null ? null : instance.getLog();
-        } catch (Throwable e) {
-            eclipseLog = null;
-        }
+    public Logger(Class<?> clazz) {
+        this.id = clazz.getName();
     }
 
-    public Logger(Class clazz) {
-        this.id = clazz.getName();
+    /**
+     * The Eclipse log is resolved on each call: a Logger may be created (as a static field) before the
+     * core bundle is started.
+     */
+    private static ILog getEclipseLog() {
+        CoreActivator instance = CoreActivator.getInstance();
+        try {
+            return instance == null ? null : instance.getLog();
+        } catch (Throwable e) {
+            return null;
+        }
     }
 
     protected void log(int severity, String message){
@@ -54,7 +56,15 @@ public class Logger implements ILogger {
         else {
             status = new Status(severity, id, message);
         }
-        eclipseLog.log(status);
+        ILog eclipseLog = getEclipseLog();
+        if (eclipseLog != null) {
+            eclipseLog.log(status);
+        } else {
+            System.err.println("[" + id + "] " + message);
+            if (throwable != null) {
+                throwable.printStackTrace();
+            }
+        }
     }
 
     @Override

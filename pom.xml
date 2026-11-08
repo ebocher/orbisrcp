@@ -5,72 +5,49 @@
 	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
 	<modelVersion>4.0.0</modelVersion>
 
+	<!--
+		The build follows the DBeaver build: same parent, same Tycho version, same Java version and
+		same p2 repositories (Eclipse release + DBeaver third-party bundles).
+
+		Expected layout (the same as for the DBeaver repositories, see dbeaver/AGENTS.md):
+		    <dev-home>/dbeaver-common
+		    <dev-home>/datadam-api
+		    <dev-home>/dbeaver
+		    <dev-home>/orbisrcp
+		DBeaver must first be installed in the local Maven repository (mvn install) so that Tycho can
+		resolve the org.jkiss.dbeaver.* bundles from it. See README.md.
+	-->
 	<parent>
-		<groupId>org.orbisgis</groupId>
-		<artifactId>orbisparent</artifactId>
-		<version>1.2.1-SNAPSHOT</version>
+		<groupId>com.dbeaver.common</groupId>
+		<artifactId>com.dbeaver.common.main</artifactId>
+		<version>2.9.0-SNAPSHOT</version>
+		<relativePath>../dbeaver-common/pom.xml</relativePath>
 	</parent>
 
 	<groupId>org.orbisgis.rcp</groupId>
 	<artifactId>orbisrcp</artifactId>
 	<version>1.0.0-SNAPSHOT</version>
+	<packaging>pom</packaging>
+
 	<modules>
 		<module>plugins</module>
 		<module>features</module>
 		<module>p2</module>
 	</modules>
-	<packaging>pom</packaging>
 
 	<properties>
-		<eclipse-p2-repo.url>http://download.eclipse.org/releases/2021-03/</eclipse-p2-repo.url>
-		<dbeaver-p2-repo.url>https://dbeaver.io/eclipse-repo</dbeaver-p2-repo.url>
-		<orbisgis-nexus-snapshot.url>https://oss.sonatype.org/content/repositories/snapshots/</orbisgis-nexus-snapshot.url>
-		<orbisgis-nexus-release.url>https://oss.sonatype.org/content/repositories/releases/</orbisgis-nexus-release.url>
-		<tycho-version>2.7.3</tycho-version>
-	</properties>
+		<!-- DBeaver ignores local artifacts because it builds everything in a single reactor.
+		     We need them: the DBeaver bundles come from the local Maven repository. -->
+		<tycho.localArtifacts>include</tycho.localArtifacts>
 
-	<repositories>
-		<repository>
-			<id>eclipse-p2-repo</id>
-			<url>http://download.eclipse.org/releases/2021-03/</url>
-			<layout>p2</layout>
-		</repository>
-		<repository>
-			<id>local-contrib</id>
-			<url>https://dbeaver.io/eclipse-repo</url>
-			<layout>p2</layout>
-		</repository>
-        <repository>
-            <id>orbisgis-release</id>
-            <url>https://oss.sonatype.org/content/repositories/releases/</url>
-            <snapshots>
-                <enabled>false</enabled>
-            </snapshots>
-            <releases>
-                <enabled>true</enabled>
-            </releases>
-        </repository>
-        <repository>
-            <id>orbisgis-snapshot</id>
-            <url>https://oss.sonatype.org/content/repositories/snapshots/</url>
-            <snapshots>
-                <enabled>true</enabled>
-            </snapshots>
-            <releases>
-                <enabled>false</enabled>
-            </releases>
-        </repository>
-	</repositories>
+		<!-- Libraries embedded in the Groovy editor bundle -->
+		<groovy.version>4.0.29</groovy.version>
+		<ivy.version>2.5.3</ivy.version>
+	</properties>
 
 	<build>
 		<sourceDirectory>${project.basedir}/src</sourceDirectory>
-	
 		<plugins>
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-resources-plugin</artifactId>
-			</plugin>
-
 			<plugin>
 				<groupId>org.eclipse.tycho</groupId>
 				<artifactId>target-platform-configuration</artifactId>
@@ -88,35 +65,23 @@
 							<arch>x86_64</arch>
 						</environment>
 						<environment>
+							<os>linux</os>
+							<ws>gtk</ws>
+							<arch>aarch64</arch>
+						</environment>
+						<environment>
 							<os>macosx</os>
 							<ws>cocoa</ws>
 							<arch>x86_64</arch>
 						</environment>
+						<environment>
+							<os>macosx</os>
+							<ws>cocoa</ws>
+							<arch>aarch64</arch>
+						</environment>
 					</environments>
 				</configuration>
 			</plugin>
-
-			<plugin>
-				<groupId>org.eclipse.tycho</groupId>
-				<artifactId>tycho-maven-plugin</artifactId>
-				<version>${tycho-version}</version>
-				<extensions>true</extensions>
-			</plugin>
-			
-			<plugin>
-				<groupId>org.eclipse.tycho</groupId>
-				<artifactId>tycho-compiler-plugin</artifactId>
-				<version>${tycho-version}</version>
-				<configuration>
-					<useProjectSettings>false</useProjectSettings>
-					<source>11</source>
-					<target>11</target>
-					<compilerArgument>-warn:+discouraged,forbidden</compilerArgument>
-				</configuration>
-			</plugin>
-			
-
-			<!-- Set Built-By info -->
 			<plugin>
 				<groupId>org.eclipse.tycho</groupId>
 				<artifactId>tycho-packaging-plugin</artifactId>
@@ -125,39 +90,32 @@
 					<archive>
 						<manifestEntries>
 							<Built-By>org.orbisgis</Built-By>
-							<Created-By>org.orbisgis</Created-By>
-							<Build-Time>${maven.build.timestamp}</Build-Time>
 						</manifestEntries>
 						<addMavenDescriptor>false</addMavenDescriptor>
 					</archive>
 				</configuration>
 			</plugin>
-
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-compiler-plugin</artifactId>
-			</plugin>
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-surefire-plugin</artifactId>
-			</plugin>
-			<plugin>
-				<groupId>org.jacoco</groupId>
-				<artifactId>jacoco-maven-plugin</artifactId>
-			</plugin>
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-javadoc-plugin</artifactId>
-			</plugin>
-
 		</plugins>
-		
 	</build>
-	<dependencies>
-		<dependency>
-			<groupId>org.orbisgis</groupId>
-			<artifactId>commons</artifactId>
-			<version>1.2.0-SNAPSHOT</version>
-		</dependency>
-	</dependencies>
+
+	<profiles>
+		<!--
+			Build against a released DBeaver instead of a local build of the DBeaver master:
+			    mvn clean verify -Pdbeaver-release
+			The update site can be changed with -Ddbeaver.update.url=...
+		-->
+		<profile>
+			<id>dbeaver-release</id>
+			<properties>
+				<dbeaver.update.url>https://dbeaver.io/update/latest/</dbeaver.update.url>
+			</properties>
+			<repositories>
+				<repository>
+					<id>dbeaver-update-site</id>
+					<url>${dbeaver.update.url}</url>
+					<layout>p2</layout>
+				</repository>
+			</repositories>
+		</profile>
+	</profiles>
 </project>

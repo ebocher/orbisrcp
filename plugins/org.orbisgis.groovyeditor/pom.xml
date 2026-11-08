@@ -14,44 +14,76 @@
     <artifactId>org.orbisgis.groovyeditor</artifactId>
     <packaging>eclipse-plugin</packaging>
 
-    <dependencies>
-        <dependency>
-            <groupId>org.codehaus.groovy</groupId>
-            <artifactId>groovy</artifactId>
-            <scope>compile</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.codehaus.groovy</groupId>
-            <artifactId>groovy-sql</artifactId>
-            <scope>compile</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.orbisgis.rcp</groupId>
-            <artifactId>org.orbisgis.core</artifactId>
-            <version>1.0.0-SNAPSHOT</version>
-        </dependency>
-        <dependency>
-            <groupId>org.eclipse.lsp4j</groupId>
-            <artifactId>org.eclipse.lsp4j</artifactId>
-            <version>0.12.0</version>
-        </dependency>
-        <dependency>
-            <groupId>org.eclipse.lsp4j</groupId>
-            <artifactId>org.eclipse.lsp4j.jsonrpc</artifactId>
-            <version>0.12.0</version>
-        </dependency>
-        <dependency>
-            <groupId>org.junit.jupiter</groupId>
-            <artifactId>junit-jupiter-engine</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.junit.jupiter</groupId>
-            <artifactId>junit-jupiter-api</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.google.code.gson</groupId>
-            <artifactId>gson</artifactId>
-            <version>2.8.9</version>
-        </dependency>
-    </dependencies>
+    <!--
+        Groovy and Ivy are embedded in this bundle (Bundle-ClassPath: libs/*.jar) instead of being
+        separate OSGi bundles. Groovy discovers its extension modules (groovy-sql, groovy-json...)
+        through a single class loader: with one bundle per jar, these extension methods would be lost.
+        The jars are copied without their version, so MANIFEST.MF does not change on upgrades:
+        only the versions in the root pom.xml need to be updated.
+    -->
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>copy-embedded-libraries</id>
+                        <phase>generate-resources</phase>
+                        <goals>
+                            <goal>copy</goal>
+                        </goals>
+                        <configuration>
+                            <outputDirectory>${project.basedir}/libs</outputDirectory>
+                            <stripVersion>true</stripVersion>
+                            <overWriteReleases>true</overWriteReleases>
+                            <artifactItems>
+                                <artifactItem>
+                                    <groupId>org.apache.groovy</groupId>
+                                    <artifactId>groovy</artifactId>
+                                    <version>${groovy.version}</version>
+                                </artifactItem>
+                                <artifactItem>
+                                    <groupId>org.apache.groovy</groupId>
+                                    <artifactId>groovy-sql</artifactId>
+                                    <version>${groovy.version}</version>
+                                </artifactItem>
+                                <artifactItem>
+                                    <groupId>org.apache.groovy</groupId>
+                                    <artifactId>groovy-json</artifactId>
+                                    <version>${groovy.version}</version>
+                                </artifactItem>
+                                <artifactItem>
+                                    <groupId>org.apache.groovy</groupId>
+                                    <artifactId>groovy-xml</artifactId>
+                                    <version>${groovy.version}</version>
+                                </artifactItem>
+                                <artifactItem>
+                                    <groupId>org.apache.groovy</groupId>
+                                    <artifactId>groovy-templates</artifactId>
+                                    <version>${groovy.version}</version>
+                                </artifactItem>
+                                <artifactItem>
+                                    <groupId>org.apache.groovy</groupId>
+                                    <artifactId>groovy-datetime</artifactId>
+                                    <version>${groovy.version}</version>
+                                </artifactItem>
+                                <artifactItem>
+                                    <groupId>org.apache.groovy</groupId>
+                                    <artifactId>groovy-nio</artifactId>
+                                    <version>${groovy.version}</version>
+                                </artifactItem>
+                                <!-- Used by Grape to resolve @Grab dependencies -->
+                                <artifactItem>
+                                    <groupId>org.apache.ivy</groupId>
+                                    <artifactId>ivy</artifactId>
+                                    <version>${ivy.version}</version>
+                                </artifactItem>
+                            </artifactItems>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
 </project>

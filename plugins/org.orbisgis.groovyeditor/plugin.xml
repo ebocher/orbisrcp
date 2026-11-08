@@ -61,6 +61,11 @@
             name="Stop the running process"> </command>
       <command
               categoryId="org.orbisgis.ui.editors.groovy"
+              description="Forget the variables, imports and libraries of the console"
+              id="org.orbisgis.ui.editors.groovy.resetContext"
+              name="Reset the Groovy context"> </command>
+      <command
+              categoryId="org.orbisgis.ui.editors.groovy"
               description="List the current class paths"
               id="org.orbisgis.ui.editors.groovy.listClasspaths"
               name="List the current class paths"> </command>
@@ -84,6 +89,7 @@
       <image commandId="org.orbisgis.ui.editors.groovy.clear" icon="icons/erase.png"/>
 	  <image commandId="org.orbisgis.ui.editors.groovy.clearOutput" icon="icons/erase.png"/>
       <image commandId="org.orbisgis.ui.editors.groovy.stopProcess" icon="icons/stop.png"/>
+      <image commandId="org.orbisgis.ui.editors.groovy.resetContext" icon="icons/reset.png"/>
       <image commandId="org.orbisgis.ui.editors.groovy.listClasspaths" icon="icons/show_classpath.png"/>
       <image commandId="org.orbisgis.ui.editors.groovy.addDirectoryToClasspaths" icon="icons/folder_add.png"/>
 	  <image commandId="org.orbisgis.ui.editors.groovy.addJarToClasspath" icon="icons/add_jar.png"/>
@@ -116,6 +122,10 @@
       </handler>
       <handler
               class="org.orbisgis.ui.editors.groovy.handlers.GroovyEditorActionHandler"
+              commandId="org.orbisgis.ui.editors.groovy.resetContext">
+      </handler>
+      <handler
+              class="org.orbisgis.ui.editors.groovy.handlers.GroovyEditorActionHandler"
               commandId="org.orbisgis.ui.editors.groovy.listClasspaths">
       </handler>
       <handler
@@ -132,7 +142,7 @@
         <view
                 id="org.jkiss.dbeaver.groovy.output"
                 class="org.orbisgis.ui.editors.groovy.GroovyOutputConsole"
-                allowMultiple="true"
+                allowMultiple="false"
                 restorable="true"
                 name="Groovy Output"
 				icon="icons/groovy_output.png"

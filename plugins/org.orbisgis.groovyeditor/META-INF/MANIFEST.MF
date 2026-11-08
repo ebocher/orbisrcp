@@ -4,21 +4,34 @@ Bundle-Name: Groovy editor
 Bundle-SymbolicName: org.orbisgis.groovyeditor;singleton:=true
 Bundle-Version: 1.0.0.qualifier
 Bundle-Vendor: OrbisGIS
-Automatic-Module-Name: org.orbisgis.groovyconsole
-Bundle-RequiredExecutionEnvironment: JavaSE-11
+Automatic-Module-Name: org.orbisgis.groovyeditor
+Bundle-RequiredExecutionEnvironment: JavaSE-21
 Require-Bundle: org.eclipse.core.runtime,
  org.eclipse.core.resources,
  org.eclipse.core.expressions,
  org.eclipse.core.filesystem,
+ org.eclipse.core.filebuffers,
  org.eclipse.ui,
  org.eclipse.jface.text,
  org.eclipse.ui.editors,
  org.eclipse.ui.ide,
  org.eclipse.ui.workbench.texteditor,
  org.jkiss.dbeaver.model,
+ org.jkiss.dbeaver.model.jdbc,
+ org.jkiss.dbeaver.ui,
  org.jkiss.dbeaver.ui.editors.sql,
- org.orbisgis.core,
- dependencies,
- org.jkiss.dbeaver.ui.navigator
+ org.jkiss.dbeaver.ui.navigator,
+ org.jkiss.dbeaver.data.gis,
+ org.orbisgis.core
+Bundle-ClassPath: .,
+ libs/groovy.jar,
+ libs/groovy-sql.jar,
+ libs/groovy-json.jar,
+ libs/groovy-xml.jar,
+ libs/groovy-templates.jar,
+ libs/groovy-datetime.jar,
+ libs/groovy-nio.jar,
+ libs/ivy.jar
+DynamicImport-Package: *
 Bundle-ActivationPolicy: lazy
 Bundle-Activator: org.orbisgis.ui.editors.groovy.GroovyActivator

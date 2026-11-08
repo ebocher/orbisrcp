@@ -20,6 +20,9 @@ package org.orbisgis.ui.editors.groovy;
 
 import org.eclipse.ui.plugin.AbstractUIPlugin;
 import org.orbisgis.core.CoreActivator;
+import org.orbisgis.ui.editors.groovy.dbeaver.DBeaverFacade;
+import org.orbisgis.ui.editors.groovy.session.GrapeSupport;
+import org.orbisgis.ui.editors.groovy.session.GroovySession;
 import org.osgi.framework.BundleContext;
 
 public class GroovyActivator extends AbstractUIPlugin {
@@ -28,6 +31,14 @@ public class GroovyActivator extends AbstractUIPlugin {
     public void start(BundleContext context) throws Exception {
         super.start(context);
         CoreActivator.getInstance().getCoreWorkspace().extend(new GroovyWorkspaceExtension());
+        // @Grab: exclusion of the embedded Groovy modules, snapshots repository, download reports
+        GrapeSupport.install(getStateLocation().toFile());
+        // 'dbeaver' variable: access to DBeaver from the scripts
+        GroovySession.addBindingContributor(binding -> {
+            DBeaverFacade facade = new DBeaverFacade();
+            binding.setVariable(DBeaverFacade.VARIABLE, facade);
+            return facade;
+        });
     }
 
     @Override

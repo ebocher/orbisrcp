@@ -1,13 +1,13 @@
 /*
- * Groovy Editor (GE) is a library that brings a groovy console to the Eclipse RCP. 
+ * Groovy Editor (GE) is a library that brings a groovy console to the Eclipse RCP.
  * GE is developed by CNRS http://www.cnrs.fr/.
  *
  * GE is part of the OrbisGIS project. GE is free software;
- * you can redistribute it and/or modify it under the terms of the GNU Lesser 
+ * you can redistribute it and/or modify it under the terms of the GNU Lesser
  * General Public License as published by the Free Software Foundation;
  * version 3.0 of the License.
  *
- * GE is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
+ * GE is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
  * without even the implied warranty of MERCHANTABILITY or
  * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License
  * for more details http://www.gnu.org/licenses.
@@ -18,290 +18,336 @@
  */
 package org.orbisgis.ui.editors.groovy.completion;
 
-import com.google.gson.JsonArray;
-import com.google.gson.JsonObject;
-import net.prominic.groovyls.GroovyServices;
-import net.prominic.groovyls.config.CompilationUnitFactory;
-import org.eclipse.jface.text.BadLocationException;
-import org.eclipse.jface.text.IDocument;
+import groovy.lang.MetaClass;
+import groovy.lang.MetaMethod;
+import groovy.lang.MetaProperty;
+import org.codehaus.groovy.runtime.InvokerHelper;
 import org.eclipse.jface.text.ITextViewer;
 import org.eclipse.jface.text.contentassist.ICompletionProposal;
 import org.eclipse.jface.text.contentassist.IContentAssistProcessor;
 import org.eclipse.jface.text.contentassist.IContextInformation;
 import org.eclipse.jface.text.contentassist.IContextInformationValidator;
-import org.eclipse.lsp4j.*;
-import org.eclipse.lsp4j.jsonrpc.messages.Either;
-import org.eclipse.lsp4j.services.LanguageClient;
-import org.eclipse.swt.widgets.Display;
-import org.eclipse.ui.IWorkbenchPage;
-import org.eclipse.ui.PlatformUI;
 import org.orbisgis.core.logger.Logger;
-import org.orbisgis.ui.editors.groovy.GroovyUtils;
+import org.orbisgis.ui.editors.groovy.session.GroovySession;
 
-import java.io.File;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.stream.Stream;
-
-import static org.eclipse.lsp4j.CompletionItemKind.Method;
-import static org.eclipse.lsp4j.CompletionItemKind.Variable;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.function.Supplier;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
- * Methods to create the list of the suggested autocompletion words.
- *
- * @author Adrien Bessy, CNRS
+ * Completion of the Groovy editor, based on the live context of the editor (see {@link GroovySession}):
+ * <ul>
+ *     <li>{@code variable.}: methods and properties of the object stored in the variable (including the
+ *     Groovy extension methods: each, collect...);</li>
+ *     <li>{@code ClassName.} or {@code java.time.LocalDate.}: static methods and fields;</li>
+ *     <li>otherwise: variables of the context, imported classes, keywords and the words of the script.</li>
+ * </ul>
+ * Only the objects already in the context are inspected: nothing is evaluated, so the completion has no
+ * side effect. Run the script (or the current line) to make its variables available to the completion.
  */
 public class GroovyCompletionProcessor implements IContentAssistProcessor {
-	
-	private static final Logger LOGGER = new Logger(GroovyCompletionProcessor.class);
-	
-	private static final String GROOVY_LANGUAGE = "groovy";
-	private static final int GROOVY_VERSION = 3;
 
-	private GroovyServices services;
-	private String scriptUri;
+    private static final Logger LOGGER = new Logger(GroovyCompletionProcessor.class);
 
-	public GroovyCompletionProcessor(){
-		//Avoid waiting the completion service instantiation
-		Display.getDefault().asyncExec(() -> {
-					Path workspaceRoot = GroovyUtils.getGroovyFolder().getFullPath().toFile().toPath();
-					services = new GroovyServices(new CompilationUnitFactory());
-					services.setWorkspaceRoot(workspaceRoot);
-					services.connect(new LanguageClient() {
+    private static final int MAX_PROPOSALS = 500;
 
-						@Override
-						public void telemetryEvent(Object object) {
+    private static final List<String> KEYWORDS = List.of("abstract", "as", "assert", "boolean", "break", "byte",
+            "case", "catch", "char", "class", "continue", "def", "default", "do", "double", "else", "enum",
+            "extends", "false", "final", "finally", "float", "for", "if", "implements", "import", "in",
+            "instanceof", "int", "interface", "long", "new", "null", "package", "private", "protected", "public",
+            "return", "short", "static", "super", "switch", "this", "throw", "throws", "trait", "true", "try",
+            "var", "void", "while");
 
-						}
+    /** Packages imported by default in Groovy */
+    private static final List<String> DEFAULT_PACKAGES = List.of("java.lang", "java.util", "java.io", "java.net",
+            "java.math", "groovy.lang", "groovy.util");
 
-						@Override
-						public CompletableFuture<MessageActionItem> showMessageRequest(ShowMessageRequestParams requestParams) {
-							return null;
-						}
+    private static final Pattern WORD = Pattern.compile("[A-Za-z_$][A-Za-z0-9_$]{2,}");
 
-						@Override
-						public void showMessage(MessageParams messageParams) {
+    private final Supplier<GroovySession> session;
 
-						}
+    /**
+     * @param session gives the Groovy context of the edited script
+     */
+    public GroovyCompletionProcessor(Supplier<GroovySession> session) {
+        this.session = session;
+    }
 
-						@Override
-						public void publishDiagnostics(PublishDiagnosticsParams diagnostics) {
+    @Override
+    public ICompletionProposal[] computeCompletionProposals(ITextViewer viewer, int offset) {
+        try {
+            return computeProposals(viewer.getDocument().get(), offset).toArray(new ICompletionProposal[0]);
+        } catch (Exception | LinkageError e) {
+            LOGGER.warn("Unable to compute the completion proposals.", e);
+            return new ICompletionProposal[0];
+        }
+    }
 
-						}
+    /**
+     * Compute the proposals for the given text and cursor offset.
+     */
+    public List<ComplProposal> computeProposals(String text, int offset) {
+        int start = offset;
+        while (start > 0 && Character.isJavaIdentifierPart(text.charAt(start - 1))) {
+            start--;
+        }
+        String prefix = text.substring(start, offset);
+        int replaceLength = identifierEnd(text, offset) - start;
+        GroovySession context = session.get();
 
-						@Override
-						public void logMessage(MessageParams message) {
+        List<ComplProposal> proposals = new ArrayList<>();
+        if (start > 0 && text.charAt(start - 1) == '.') {
+            String receiver = receiverBefore(text, start - 1);
+            if (!receiver.isEmpty() && context != null) {
+                addMemberProposals(proposals, context, receiver, prefix, start, replaceLength);
+            }
+        } else {
+            addContextProposals(proposals, context, text, prefix, start, replaceLength);
+        }
+        proposals.sort(Comparator.comparing(ComplProposal::getKind)
+                .thenComparing(p -> p.getDisplayString().toLowerCase()));
+        return proposals.size() > MAX_PROPOSALS ? new ArrayList<>(proposals.subList(0, MAX_PROPOSALS)) : proposals;
+    }
 
-						}
-					});
+    /**
+     * @return the dotted identifier ending at {@code dotOffset} ({@code a.b.c} in {@code a.b.c.}), or an empty
+     * string if the receiver is not a plain identifier (method call, literal...)
+     */
+    static String receiverBefore(String text, int dotOffset) {
+        int start = dotOffset;
+        while (start > 0) {
+            char c = text.charAt(start - 1);
+            if (Character.isJavaIdentifierPart(c) || c == '.') {
+                start--;
+            } else {
+                break;
+            }
+        }
+        String receiver = text.substring(start, dotOffset);
+        if (receiver.isEmpty() || receiver.startsWith(".") || receiver.endsWith(".") || receiver.contains("..")
+                || !Character.isJavaIdentifierStart(receiver.charAt(0))) {
+            return "";
+        }
+        return receiver;
+    }
 
-					//Load the jars in ./groovy if exists
-					JsonObject settings	 = buildGroovySettings();
-					if(settings!=null) {
-						DidChangeConfigurationParams dcp = new DidChangeConfigurationParams();
-						dcp.setSettings(settings);
-						services.didChangeConfiguration(dcp);
-					}
-					IWorkbenchPage activePage = PlatformUI.getWorkbench().getActiveWorkbenchWindow().getActivePage();
-					String name = activePage.getActiveEditor().getEditorInput().getName();
-					Path filePath = workspaceRoot.resolve(name);
-					scriptUri = filePath.toUri().toString();
-				}
-		);
-	}
+    private static int identifierEnd(String text, int offset) {
+        int end = offset;
+        while (end < text.length() && Character.isJavaIdentifierPart(text.charAt(end))) {
+            end++;
+        }
+        return end;
+    }
 
-	/**
-	 * Build a json array to set a list of jar available in "user.home"./groovy folder
-	 * Those jars are set to the completion manager
-	 * @return
-	 */
-	private JsonObject buildGroovySettings() {
-		File grabFolder = new File(System.getProperty("user.home") + File.separator + "/.groovy");
+    // ---------------------------------------------------------------- receiver.member
 
-		if(grabFolder.exists()&& grabFolder.isDirectory()){
-			try (Stream<Path> walk = Files.walk(grabFolder.toPath())) {
-				JsonArray jars = new JsonArray();
-				walk
-						.filter(p -> !Files.isDirectory(p))   // not a directory
-						.map(p -> p.toString().toLowerCase()) // convert path to string
-						.filter(f -> f.endsWith("jar"))       // check end with
-						.forEach(it -> jars.add(it));        // collect all matched to a List
+    private void addMemberProposals(List<ComplProposal> proposals, GroovySession context, String receiver,
+                                    String prefix, int start, int replaceLength) {
+        Map<String, Object> variables = context.getVariables();
+        if (!receiver.contains(".") && variables.containsKey(receiver)) {
+            Object value = variables.get(receiver);
+            if (value instanceof Class<?> clazz) {
+                addStaticMembers(proposals, clazz, prefix, start, replaceLength);
+            } else if (value != null) {
+                addInstanceMembers(proposals, value, prefix, start, replaceLength);
+            }
+            return;
+        }
+        Class<?> clazz = resolveClass(context, receiver);
+        if (clazz != null) {
+            addStaticMembers(proposals, clazz, prefix, start, replaceLength);
+        }
+    }
 
-				JsonObject classpath = new JsonObject();
-				classpath.add("classpath", jars);
+    private void addInstanceMembers(List<ComplProposal> proposals, Object value, String prefix, int start,
+                                    int replaceLength) {
+        MetaClass metaClass = InvokerHelper.getMetaClass(value);
+        Set<String> seen = new TreeSet<>();
+        for (MetaProperty property : metaClass.getProperties()) {
+            String name = property.getName();
+            if (matches(name, prefix) && seen.add("p:" + name)) {
+                proposals.add(new ComplProposal(start, replaceLength, name, name.length(), name,
+                        ": " + simpleName(property.getType()), ComplProposal.Kind.PROPERTY, prefix.length()));
+            }
+        }
+        List<MetaMethod> methods = new ArrayList<>(metaClass.getMethods());
+        methods.addAll(metaClass.getMetaMethods());
+        for (MetaMethod method : methods) {
+            if (!method.isPublic() || method.getName().contains("$") || method.getName().startsWith("<")) {
+                continue;
+            }
+            addMethod(proposals, seen, method.getName(), method.getNativeParameterTypes(), method.getReturnType(),
+                    prefix, start, replaceLength);
+        }
+    }
 
-				JsonObject groovy = new JsonObject();
-				groovy.add("groovy", classpath);
+    private void addStaticMembers(List<ComplProposal> proposals, Class<?> clazz, String prefix, int start,
+                                  int replaceLength) {
+        Set<String> seen = new TreeSet<>();
+        for (Field field : clazz.getFields()) {
+            if (Modifier.isStatic(field.getModifiers()) && matches(field.getName(), prefix)
+                    && seen.add("p:" + field.getName())) {
+                proposals.add(new ComplProposal(start, replaceLength, field.getName(), field.getName().length(),
+                        field.getName(), ": " + simpleName(field.getType()), ComplProposal.Kind.PROPERTY,
+                        prefix.length()));
+            }
+        }
+        for (Method method : clazz.getMethods()) {
+            if (Modifier.isStatic(method.getModifiers())) {
+                addMethod(proposals, seen, method.getName(), method.getParameterTypes(), method.getReturnType(),
+                        prefix, start, replaceLength);
+            }
+        }
+        if (matches("class", prefix)) {
+            proposals.add(new ComplProposal(start, replaceLength, "class", 5, "class", ": Class",
+                    ComplProposal.Kind.PROPERTY, prefix.length()));
+        }
+    }
 
-				JsonObject settings = new JsonObject();
-				settings.add("settings", groovy);
+    private static void addMethod(List<ComplProposal> proposals, Set<String> seen, String name,
+                                  Class<?>[] parameters, Class<?> returnType, String prefix, int start,
+                                  int replaceLength) {
+        if (!matches(name, prefix)) {
+            return;
+        }
+        StringBuilder signature = new StringBuilder(name).append('(');
+        for (int i = 0; i < parameters.length; i++) {
+            if (i > 0) {
+                signature.append(", ");
+            }
+            signature.append(simpleName(parameters[i]));
+        }
+        signature.append(')');
+        if (!seen.add("m:" + signature)) {
+            return;
+        }
+        String replacement = name + "()";
+        int cursor = parameters.length == 0 ? replacement.length() : name.length() + 1;
+        proposals.add(new ComplProposal(start, replaceLength, replacement, cursor, signature.toString(),
+                ": " + simpleName(returnType), ComplProposal.Kind.METHOD, prefix.length()));
+    }
 
-				return settings;
+    // ---------------------------------------------------------------- identifiers
 
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
-		}
-		return null;
-	}
+    private void addContextProposals(List<ComplProposal> proposals, GroovySession context, String text,
+                                     String prefix, int start, int replaceLength) {
+        Set<String> seen = new TreeSet<>();
+        if (context != null) {
+            for (Map.Entry<String, Object> variable : context.getVariables().entrySet()) {
+                String name = variable.getKey();
+                if (matches(name, prefix) && seen.add(name)) {
+                    Object value = variable.getValue();
+                    proposals.add(new ComplProposal(start, replaceLength, name, name.length(), name,
+                            value == null ? null : ": " + simpleName(value.getClass()), ComplProposal.Kind.VARIABLE,
+                            prefix.length()));
+                }
+            }
+            for (Map.Entry<String, String> imported : context.getImportedClasses().entrySet()) {
+                String name = imported.getKey();
+                if (matches(name, prefix) && seen.add(name)) {
+                    proposals.add(new ComplProposal(start, replaceLength, name, name.length(), name,
+                            "- " + imported.getValue(), ComplProposal.Kind.CLASS, prefix.length()));
+                }
+            }
+        }
+        if (prefix.isEmpty()) {
+            return;
+        }
+        for (String keyword : KEYWORDS) {
+            if (matches(keyword, prefix) && seen.add(keyword)) {
+                proposals.add(new ComplProposal(start, replaceLength, keyword, keyword.length(), keyword, null,
+                        ComplProposal.Kind.KEYWORD, prefix.length()));
+            }
+        }
+        // Words of the script: useful before the script has been run
+        Matcher matcher = WORD.matcher(text);
+        while (matcher.find()) {
+            String word = matcher.group();
+            if (matcher.start() != start && matches(word, prefix) && !word.equals(prefix) && seen.add(word)) {
+                proposals.add(new ComplProposal(start, replaceLength, word, word.length(), word, null,
+                        ComplProposal.Kind.WORD, prefix.length()));
+            }
+        }
+    }
 
-	private static Position getPosition(ITextViewer viewer, int offset){
-		String text = viewer.getDocument().get();
-		//Get caret line/col position from text and offset
-		String subText = text.substring(0, offset);
-		int line = 0;
-		int col = 0;
-		for(int i = 0; i<offset; i++) {
-			if(subText.charAt(i) == '\n') {
-				col=0;
-				line++;
-			}
-			col++;
-		}
-		col--;
-		return new Position(line, col);
-	}
+    // ---------------------------------------------------------------- helpers
 
-	/**
-	* Build the list of the completion proposals provided from the Groovy Langage Server project according to the word type.
-    * @param viewer the editor view
-    * @param offset the cursor position in the document
-    * @return the list of the completion proposals
-    */
-	@Override
-	public ICompletionProposal[] computeCompletionProposals(ITextViewer viewer, int offset) {
-		if (offset == 0) {
-			return null;
-		}
-		IDocument document = viewer.getDocument();
-		int currOffset = offset-1;
-		//If no text, skip completion
-		try {
-			while (currOffset >= 0 && !Character.isWhitespace(document.getChar(currOffset))) {
-				currOffset--;
-			}
-		} catch (BadLocationException e1) {
-			LOGGER.error("Error on getting the access to a position in a document.", e1);
-		}
+    /**
+     * Resolve a class name written in the script: fully qualified name, imported class, class of a package
+     * imported in the context or by default.
+     */
+    private static Class<?> resolveClass(GroovySession context, String name) {
+        List<String> candidates = new ArrayList<>();
+        if (name.contains(".")) {
+            candidates.add(name);
+        } else {
+            String imported = context.getImportedClasses().get(name);
+            if (imported != null) {
+                candidates.add(imported);
+            }
+            for (String pkg : context.getImportedPackages()) {
+                candidates.add(pkg + "." + name);
+            }
+            for (String pkg : DEFAULT_PACKAGES) {
+                candidates.add(pkg + "." + name);
+            }
+        }
+        ClassLoader loader = context.getClassLoader();
+        for (String candidate : candidates) {
+            if (!Character.isUpperCase(candidate.charAt(candidate.lastIndexOf('.') + 1))) {
+                continue;
+            }
+            try {
+                return Class.forName(candidate, false, loader);
+            } catch (ClassNotFoundException | LinkageError e) {
+                // try the next one
+            }
+        }
+        return null;
+    }
 
-		//Notification to service : open document
-		TextDocumentItem textDocumentItem = new TextDocumentItem(scriptUri, GROOVY_LANGUAGE, GROOVY_VERSION, document.get());
-		services.didOpen(new DidOpenTextDocumentParams(textDocumentItem));
-		TextDocumentIdentifier textDocument = new TextDocumentIdentifier(scriptUri);
+    private static boolean matches(String name, String prefix) {
+        return prefix.isEmpty() || name.regionMatches(true, 0, prefix, 0, prefix.length());
+    }
 
-		Position position = getPosition(viewer, offset);
+    private static String simpleName(Class<?> type) {
+        if (type == null) {
+            return "Object";
+        }
+        return type.isArray() ? simpleName(type.getComponentType()) + "[]" : type.getSimpleName();
+    }
 
-		Either<List<CompletionItem>, CompletionList> result = null;
-		try {
-			result = services.completion(new CompletionParams(textDocument, position)).get();
-		} catch (InterruptedException | ExecutionException e) {
-			LOGGER.error("Error on getting the completion result.", e);
-		}
+    @Override
+    public IContextInformation[] computeContextInformation(ITextViewer viewer, int offset) {
+        return null;
+    }
 
-		//If no completion available, return null
-		if (result == null || result.getLeft().isEmpty()) {
-			return null;
-		}
-		return buildProposals(result.getLeft(), offset, document.get());
-	}
+    @Override
+    public char[] getCompletionProposalAutoActivationCharacters() {
+        return new char[]{'.'};
+    }
 
-	private static ICompletionProposal[] buildProposals(List<CompletionItem> items, int offset, String text){
-		List<ICompletionProposal> proposals = new ArrayList<>();
-		for (CompletionItem item : items) {
-			if (item.getKind() != Method && item.getKind() != Variable) {
-				continue;
-			}
+    @Override
+    public char[] getContextInformationAutoActivationCharacters() {
+        return null;
+    }
 
-			String replaceStr;
-			int[] bounds;
-			switch (item.getKind()) {
-				case Method:
-					replaceStr = item.getLabel();
-					bounds = getWordBoundary(offset, text, List.of('('), List.of('.'));
-					if (bounds != null) {
-						int cursorPos;
-						if (bounds[1] == text.length() || text.charAt(bounds[1]) != '(') {
-							replaceStr += "()";
-							cursorPos = replaceStr.length() - 1;
-						} else {
-							cursorPos = replaceStr.length() + 1;
-						}
-						int replaceOff = bounds[0];
-						int replaceLength = bounds[1] - bounds[0];
-						proposals.add(new ComplProposal(offset - replaceOff, replaceOff, replaceLength, replaceStr,
-								cursorPos, item.getLabel(), item.getKind()));
-					}
-					break;
-				case Variable:
-					replaceStr = item.getLabel();
-					bounds = getWordBoundary(offset, text, List.of('.'), null);
-					if (bounds != null) {
-						int replaceOff = bounds[0];
-						int replaceLength = bounds[1] - bounds[0];
-						int cursorPos = replaceStr.length();
-						proposals.add(new ComplProposal(offset - replaceOff, replaceOff, replaceLength, replaceStr,
-								cursorPos, item.getLabel(), item.getKind()));
-					}
-					break;
-			}
-		}
-		return proposals.toArray(new ICompletionProposal[0]);
-	}
+    @Override
+    public String getErrorMessage() {
+        return null;
+    }
 
-	private static int[] getWordBoundary(int offset, String text, List<Character> forbiddenStart, List<Character> forbiddenEnd) {
-		int start = 0;
-		for(int j=offset-1; j>=0; j--){
-			char c = text.charAt(j);
-			if(forbiddenStart != null && forbiddenStart.contains(c)){
-				return null;
-			}
-			if(!(c>='a' && c<='z' || c=='_' || c>='A' && c<='Z'|| c>='0' && c<='9')){
-				start = j+1;
-				break;
-			}
-		}
-		int end = text.length();
-		for(int j=offset; j<text.length(); j++){
-			char c = text.charAt(j);
-			if(forbiddenEnd != null && forbiddenEnd.contains(c)){
-				return null;
-			}
-			if(!(c>='a' && c<='z' || c=='_' || c>='A' && c<='Z'|| c>='0' && c<='9')){
-				end = j;
-				break;
-			}
-		}
-		return new int[]{start, end};
-	}
-
-	@Override
-	public IContextInformation[] computeContextInformation(ITextViewer viewer, int offset) {
-		return null;
-	}
-
-	@Override
-	public char[] getCompletionProposalAutoActivationCharacters() {
-		return null;
-	}
-
-	@Override
-	public char[] getContextInformationAutoActivationCharacters() {
-		return null;
-	}
-
-	@Override
-	public String getErrorMessage() {
-		return null;
-	}
-
-	@Override
-	public IContextInformationValidator getContextInformationValidator() {
-		return null;
-	}
-
+    @Override
+    public IContextInformationValidator getContextInformationValidator() {
+        return null;
+    }
 }

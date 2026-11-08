@@ -24,6 +24,7 @@ import java.util.List;
 import org.eclipse.core.commands.AbstractHandler;
 import org.eclipse.core.commands.ExecutionEvent;
 import org.eclipse.swt.widgets.TreeItem;
+import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IViewPart;
 import org.eclipse.ui.IWorkbenchPage;
 import org.eclipse.ui.IWorkbenchWindow;
@@ -44,12 +45,30 @@ public class GroovyEditorActionHandler extends AbstractHandler {
 
     @Override
     public Object execute(ExecutionEvent executionEvent) {
-        GroovyEditor editor = RuntimeUtils.getObjectAdapter(HandlerUtil.getActiveEditor(executionEvent), GroovyEditor.class);
+        String actionId = executionEvent.getCommand().getId();
+        // These commands do not depend on an editor (they are also available in the output view)
+        switch (actionId) {
+            case GroovyEditorCommands.CMD_GROOVY_DELETE_OUTPUT:
+                GroovyConsoleContent.clear();
+                return null;
+            case GroovyEditorCommands.CMD_LIST_CLASSPATHS:
+                ClassPathHandler.showClassPaths();
+                return null;
+            case GroovyEditorCommands.CMD_ADD_DIR_TO_CLASSPATH:
+                ClassPathHandler.addDirPathToPathList();
+                return null;
+            case GroovyEditorCommands.CMD_ADD_JAR_TO_CLASSPATH:
+                ClassPathHandler.addJarPathToPathList();
+                return null;
+            default:
+                break;
+        }
+        IEditorPart activeEditor = HandlerUtil.getActiveEditor(executionEvent);
+        GroovyEditor editor = activeEditor == null ? null : RuntimeUtils.getObjectAdapter(activeEditor, GroovyEditor.class);
         if (editor == null) {
-            LOGGER.error("No active Groovy editor found");
+            LOGGER.warn("No active Groovy editor found");
             return null;
         }
-        String actionId = executionEvent.getCommand().getId();
         switch (actionId) {
             case GroovyEditorCommands.CMD_CLEAR:
                 editor.clear();
@@ -60,23 +79,14 @@ public class GroovyEditorActionHandler extends AbstractHandler {
             case GroovyEditorCommands.CMD_EXECUTE_SELECTION:
                 editor.executeSelection();
                 break;
-            case GroovyEditorCommands.CMD_GROOVY_DELETE_OUTPUT:
-            	GroovyConsoleContent.writeIntoConsole("ERASE");
-                break;
             case GroovyEditorCommands.CMD_STOP_PROCESS:
                 editor.stop();
                 break;
-            case GroovyEditorCommands.CMD_LIST_CLASSPATHS:
-                ClassPathHandler.showClassPaths();
-                break;
-            case GroovyEditorCommands.CMD_ADD_DIR_TO_CLASSPATH:
-            	ClassPathHandler.addDirPathToPathList();
-                break;
-            case GroovyEditorCommands.CMD_ADD_JAR_TO_CLASSPATH:
-            	ClassPathHandler.addJarPathToPathList();
+            case GroovyEditorCommands.CMD_RESET_CONTEXT:
+                editor.resetContext();
                 break;
             default:
-                LOGGER.error("Unsupported SQL editor command: " + actionId);
+                LOGGER.error("Unsupported Groovy editor command: " + actionId);
                 break;
         }
 

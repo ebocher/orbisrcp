@@ -21,12 +21,10 @@ package org.orbisgis.ui.editors.groovy.ui;
 
 import java.io.File;
 import java.io.IOException;
-import java.net.MalformedURLException;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.Enumeration;
 import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 
@@ -94,42 +92,37 @@ public class ScrollableDialog extends TitleAreaDialog {
             TableColumn column = new TableColumn(table, SWT.CENTER);
             column.setText(titles[loopIndex]);
          }
-        int i = 0;
-        Iterator<URL> it = urls.iterator();
-        while(it.hasNext()){
-        	URL url = it.next();
-        	String path = url.getPath().toString().replace("/d:", "");
-            TableItem item = new TableItem(table, SWT.CENTER);
-            if (path != "") {
-                String[] parts = path.split("/");
-            	int length = parts.length;
-            	
-            	int fileNumber = countClassFile(path);
-            	countFile = 0;
-                
-            	item.setText(0, parts[length-1].replace("!", ""));
-            	item.setText(1, path);
-            	item.setText(2, "" + fileNumber);
-            	
-                TableEditor editor = new TableEditor(table);
-                editor.horizontalAlignment = SWT.RIGHT;
-                editor.grabHorizontal = true;
-                Button deleteButton = new Button(table, SWT.PUSH );
-                deleteButton.setToolTipText("Remove this path");
-                Bundle bundle = FrameworkUtil.getBundle(getClass());
-                String pathImage = "/icons/stop.png";
-                URL imageUrl = FileLocator.find(bundle, new Path(pathImage), null);
-                ImageDescriptor imageDesc = ImageDescriptor.createFromURL(imageUrl);
-                Image image = imageDesc.createImage();
-                deleteButton.setImage(image);
-                deleteButton.pack();
-                editor.minimumWidth = deleteButton.getSize().x;
-                editor.horizontalAlignment = SWT.CENTER;
-                editor.setEditor(deleteButton, item, 3);
-                deleteButton.addListener(SWT.Selection, new SelectionListener(item, deleteButton, i));
+        for (URL url : urls) {
+            File file;
+            try {
+                file = new File(url.toURI());
+            } catch (URISyntaxException | IllegalArgumentException e) {
+                continue;
             }
-            i++;
-           
+            String path = file.getPath();
+            TableItem item = new TableItem(table, SWT.CENTER);
+            int fileNumber = countClassFile(path);
+            countFile = 0;
+
+            item.setText(0, file.getName());
+            item.setText(1, path);
+            item.setText(2, "" + fileNumber);
+
+            TableEditor editor = new TableEditor(table);
+            editor.horizontalAlignment = SWT.RIGHT;
+            editor.grabHorizontal = true;
+            Button deleteButton = new Button(table, SWT.PUSH );
+            deleteButton.setToolTipText("Remove this path (open consoles keep it until their context is reset)");
+            Bundle bundle = FrameworkUtil.getBundle(getClass());
+            URL imageUrl = FileLocator.find(bundle, new Path("/icons/stop.png"), null);
+            Image image = ImageDescriptor.createFromURL(imageUrl).createImage();
+            deleteButton.addDisposeListener(e -> image.dispose());
+            deleteButton.setImage(image);
+            deleteButton.pack();
+            editor.minimumWidth = deleteButton.getSize().x;
+            editor.horizontalAlignment = SWT.CENTER;
+            editor.setEditor(deleteButton, item, 3);
+            deleteButton.addListener(SWT.Selection, new SelectionListener(item, deleteButton, url));
         }
 
         for (int loopIndex = 0; loopIndex < titles.length; loopIndex++) {
@@ -149,20 +142,16 @@ public class ScrollableDialog extends TitleAreaDialog {
     class SelectionListener implements Listener {
         TableItem item;
         Button deleteButton;
-        int index;
+        URL url;
 
-        public SelectionListener(TableItem item, Button deleteButton, int index) {
+        public SelectionListener(TableItem item, Button deleteButton, URL url) {
             this.item = item;
             this.deleteButton = deleteButton;
-            this.index = index;
+            this.url = url;
         }
 
         public void handleEvent(Event event) {
-            try {
-				ClassPathHandler.deleteOneURL(index);
-			} catch (MalformedURLException e) {
-				e.printStackTrace();
-			}
+            ClassPathHandler.removeURL(url);
             this.deleteButton.dispose();
             this.item.dispose();
         }
@@ -174,9 +163,8 @@ public class ScrollableDialog extends TitleAreaDialog {
 	 * @param path the path of a directory or a jar
 	 */
     private int countClassFile(String path) { 
-    	if(path.endsWith("!")){
-    		String jarPath = path.replace("!", "");
-	    	try (JarFile jarFile = new JarFile(jarPath)){
+    	if(path.endsWith(".jar")){
+	    	try (JarFile jarFile = new JarFile(path)){
 				final Enumeration<JarEntry> entries = jarFile.entries();
 				while (entries.hasMoreElements()) {
 		            final JarEntry entry = entries.nextElement();

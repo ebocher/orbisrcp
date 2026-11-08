@@ -7,33 +7,45 @@ jobs:
     runs-on: ubuntu-latest
     steps:
 
-      - name: Set up JDK 11
-        uses: actions/setup-java@v1
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
         with:
-          java-version: 11
+          distribution: temurin
+          java-version: 21
+          cache: maven
+
+      # DBeaver and its dependencies must be cloned side by side (see dbeaver/AGENTS.md)
+      - name: Checkout DBeaver common
+        uses: actions/checkout@v4
+        with:
+          repository: dbeaver/dbeaver-common
+          path: dbeaver-common
+
+      - name: Checkout Datadam API
+        uses: actions/checkout@v4
+        with:
+          repository: dbeaver/datadam-api
+          path: datadam-api
 
       - name: Checkout DBeaver
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           repository: dbeaver/dbeaver
           path: dbeaver
 
-      - name: Build DBeaver
-        working-directory: dbeaver/
-        run: mvn clean install
-
       - name: Checkout OrbisRCP
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
-          repository: orbisgis/orbisrcp
+          path: orbisrcp
+
+      - name: Build and install DBeaver
+        run: mvn -B install -f dbeaver/product/aggregate/pom.xml -T1C -DskipTests
 
       - name: Build OrbisRCP
-        run: |
-          git clone https://github.com/GroovyLanguageServer/groovy-language-server
-          cd groovy-language-server
-          ./gradlew build
-          cd ..
-          ls plugins/dependencies
-          mkdir  plugins/dependencies/libs
-          cp groovy-language-server/build/libs/groovy-language-server-all.jar ./plugins/dependencies/libs/groovy-language-server.jar
-          mvn clean install
+        run: mvn -B clean verify -f orbisrcp/pom.xml
+
+      - name: Upload the p2 repository
+        uses: actions/upload-artifact@v4
+        with:
+          name: orbisrcp-p2
+          path: orbisrcp/p2/target/repository/

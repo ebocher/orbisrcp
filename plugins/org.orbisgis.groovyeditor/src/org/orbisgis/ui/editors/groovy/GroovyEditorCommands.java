@@ -24,6 +24,7 @@ public interface GroovyEditorCommands {
     String CMD_CLEAR= "org.orbisgis.ui.editors.groovy.clear";
     String CMD_GROOVY_DELETE_OUTPUT= "org.orbisgis.ui.editors.groovy.clearOutput";
     String CMD_STOP_PROCESS= "org.orbisgis.ui.editors.groovy.stopProcess";
+    String CMD_RESET_CONTEXT= "org.orbisgis.ui.editors.groovy.resetContext";
     String CMD_LIST_CLASSPATHS= "org.orbisgis.ui.editors.groovy.listClasspaths";
     String CMD_ADD_DIR_TO_CLASSPATH= "org.orbisgis.ui.editors.groovy.addDirectoryToClasspaths";
     String CMD_ADD_JAR_TO_CLASSPATH= "org.orbisgis.ui.editors.groovy.addJarToClasspath";

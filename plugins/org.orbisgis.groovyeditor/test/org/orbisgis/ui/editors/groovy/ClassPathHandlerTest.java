@@ -21,7 +21,6 @@ package org.orbisgis.ui.editors.groovy;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
-import org.orbisgis.core.logger.Logger;
 
 import java.io.File;
 import java.net.MalformedURLException;
@@ -34,74 +33,61 @@ import static org.orbisgis.ui.editors.groovy.ClassPathHandler.*;
 
 class ClassPathHandlerTest {
 
-    private static final Logger LOGGER = new Logger(ClassPathHandlerTest.class);
-    private static java.net.URL notAjar = null;
-    private static java.net.URL aJar = null;
-
-    static {
-        try {
-            notAjar = new File("///d:" + "/notAJar").toURI().toURL();
-            aJar = new File("/aJar" + "!/").toURI().toURL();
-        } catch (MalformedURLException e) {
-            LOGGER.error("MalformedURLException", e);
-        }
+    private static URL url(String path) throws MalformedURLException {
+        return new File(path).toURI().toURL();
     }
 
     @AfterEach
-    void afterEach() throws MalformedURLException {
-        for(int i=0; i< getUrls().size(); i++){
-            deleteOneURL(i);
+    void afterEach() {
+        for (URL url : getUrls()) {
+            removeURL(url);
         }
     }
 
     @Test
-    void addPathToUrlListIfDirectoryTest(){
-        List<URL> urls = new ArrayList<>();
-        urls.add(notAjar);
-
-        addPathToUrlList("/notAJar", false);
-
-        assertEquals(urls, getUrls());
+    void addDirectoryTest() throws MalformedURLException {
+        addPathToUrlList("/notAJar");
+        assertEquals(List.of(url("/notAJar")), new ArrayList<>(getUrls()));
     }
 
     @Test
-    void addPathToUrlListIfJarTest(){
-        List<URL> urls = new ArrayList<>();
-        urls.add(aJar);
-
-        addPathToUrlList("/aJar", true);
-
-        assertEquals(urls, getUrls());
+    void addJarTest() throws MalformedURLException {
+        addPathToUrlList("/aJar.jar");
+        assertEquals(List.of(url("/aJar.jar")), new ArrayList<>(getUrls()));
     }
 
     @Test
-    void getUrlsInArrayTest(){
-        List<URL> urls = new ArrayList<>();
-        urls.add(notAjar);
-        addPathToUrlList("/notAJar", false);
-
-        URL[] urlList = urls.toArray( new URL[0] );
-
-        assertEquals(urlList[0], getUrlsInArray()[0]);
+    void addNullOrDuplicateTest() {
+        addPathToUrlList(null);
+        addPathToUrlList("/aJar.jar");
+        addPathToUrlList("/aJar.jar");
+        assertEquals(1, getUrlsInArray().length);
     }
 
     @Test
-    void getUrlsInArrayIfNullTest() {
+    void getUrlsInArrayIfEmptyTest() {
         assertEquals(0, getUrlsInArray().length);
     }
 
     @Test
     void deleteOneURLTest() throws MalformedURLException {
-        List<URL> urls = new ArrayList<>();
-        urls.add(notAjar);
-        urls.add(aJar);
-
-        addPathToUrlList("/notAJar", false);
-        addPathToUrlList("/aJar", true);
+        addPathToUrlList("/notAJar");
+        addPathToUrlList("/aJar.jar");
         deleteOneURL(1);
-
         assertEquals(1, getUrlsInArray().length);
-        assertEquals(urls.get(0), getUrlsInArray()[0]);
+        assertEquals(url("/notAJar"), getUrlsInArray()[0]);
     }
 
+    @Test
+    void listenerTest() throws MalformedURLException {
+        List<URL> added = new ArrayList<>();
+        java.util.function.Consumer<URL> listener = added::add;
+        addListener(listener);
+        try {
+            addPathToUrlList("/aJar.jar");
+        } finally {
+            removeListener(listener);
+        }
+        assertEquals(List.of(url("/aJar.jar")), added);
+    }
 }

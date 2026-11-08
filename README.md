@@ -10,19 +10,36 @@ If you have any questions, comments or troubles with the plugins, feel free to p
 
 ## Developing
 
-In order to compile OrbisRCP, DBeaver should be build first.
+OrbisRCP is built against the master branch of DBeaver, with the same tools as DBeaver: Java 21, Maven and
+Tycho. The build uses `dbeaver-common` as parent, so the Tycho version, the Java version and the p2 repositories
+(Eclipse release and DBeaver third-party bundles) always follow DBeaver.
+
+DBeaver and its dependencies must be cloned next to OrbisRCP, then installed in the local Maven repository:
 
 ```bash
-export JAVA_HOME=/path/to/the/jdk/11
+export JAVA_HOME=/path/to/the/jdk/21
+mkdir dbeaver-dev && cd dbeaver-dev
+git clone https://github.com/dbeaver/dbeaver-common
+git clone https://github.com/dbeaver/datadam-api
 git clone https://github.com/dbeaver/dbeaver
-cd dbeaver
-mvn clean install -Dmaven.test.skip=true
-#Wait
-cd ..
 git clone https://github.com/orbisgis/orbisrcp
-cd orbisrcp
-mvn clean install
+
+# Build and install DBeaver (long the first time)
+mvn install -f dbeaver/product/aggregate/pom.xml -T1C -DskipTests
+
+# Build OrbisRCP: the p2 repository is created in orbisrcp/p2/target/repository
+mvn clean verify -f orbisrcp/pom.xml
 ```
+
+To build against a released DBeaver instead of the master branch, use the `dbeaver-release` profile
+(`dbeaver-common` must still be cloned next to OrbisRCP, at the tag of the DBeaver version):
+
+```bash
+mvn clean verify -f orbisrcp/pom.xml -Pdbeaver-release -Ddbeaver.update.url=https://dbeaver.io/update/latest/
+```
+
+To test the plugins, install the p2 repository `orbisrcp/p2/target/repository` in DBeaver
+(`Help` > `Install New Software...` > `Add...` > `Local...`).
 
 ## Plugins installation
 

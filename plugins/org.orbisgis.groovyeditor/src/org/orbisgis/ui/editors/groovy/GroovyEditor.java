@@ -19,8 +19,11 @@
 package org.orbisgis.ui.editors.groovy;
 
 import org.eclipse.core.runtime.NullProgressMonitor;
+import org.eclipse.jface.action.IAction;
 import org.eclipse.jface.resource.ImageDescriptor;
+import org.eclipse.jface.text.BadLocationException;
 import org.eclipse.jface.text.IDocument;
+import org.eclipse.jface.text.IRegion;
 import org.eclipse.jface.text.ITextSelection;
 import org.eclipse.jface.text.ITextViewerExtension;
 import org.eclipse.jface.text.source.ISourceViewer;
@@ -31,17 +34,27 @@ import org.eclipse.swt.layout.GridData;
 import org.eclipse.swt.layout.GridLayout;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.ui.ISaveablePart2;
+import org.eclipse.ui.editors.text.ForwardingDocumentProvider;
+import org.eclipse.ui.editors.text.TextFileDocumentProvider;
 import org.eclipse.ui.texteditor.AbstractDecoratedTextEditor;
 import org.eclipse.ui.texteditor.IDocumentProvider;
+import org.eclipse.ui.texteditor.ITextEditorActionDefinitionIds;
+import org.eclipse.ui.texteditor.TextOperationAction;
 import org.jkiss.dbeaver.ui.UIUtils;
 import org.jkiss.dbeaver.ui.controls.VerticalButton;
 import org.jkiss.dbeaver.ui.controls.VerticalFolder;
 import org.orbisgis.core.logger.Logger;
+import org.orbisgis.ui.editors.groovy.GroovyOutputConsole.GroovyConsoleContent;
+import org.orbisgis.ui.editors.groovy.GroovyOutputConsole.Style;
+import org.orbisgis.ui.editors.groovy.session.GroovySession;
+import org.orbisgis.ui.editors.groovy.syntax.GroovyPartitions;
 import org.orbisgis.ui.editors.groovy.syntax.GroovySourceViewerConfiguration;
 
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.ListResourceBundle;
+import java.util.ResourceBundle;
 
 public class GroovyEditor extends AbstractDecoratedTextEditor implements ISaveablePart2 {
 
@@ -51,12 +64,27 @@ public class GroovyEditor extends AbstractDecoratedTextEditor implements ISaveab
     private static final int SIDE_TOOLBAR_MARGIN_BOTTOM = 10;
     private static final int SIDE_TOOLBAR_VERTICAL_SPACING = 3;
 
+    private static final String CONTENT_ASSIST_ACTION = "ContentAssistProposal";
+
     private GroovyJob job;
+
+    /** Groovy context of this editor, kept between the executions */
+    private final GroovySession session = new GroovySession();
 
     public GroovyEditor(){
         super();
         setKeyBindingScopes(new String[]{"org.orbisgis.ui.editors.groovy"});
-        setSourceViewerConfiguration(new GroovySourceViewerConfiguration());
+        // The documents get the Groovy partitioner (comments, strings) used by the coloring and the completion
+        setDocumentProvider(new ForwardingDocumentProvider(GroovyPartitions.PARTITIONING,
+                GroovyPartitions::setup, new TextFileDocumentProvider()));
+        setSourceViewerConfiguration(new GroovySourceViewerConfiguration(this));
+    }
+
+    /**
+     * @return the Groovy context of this editor
+     */
+    public GroovySession getSession() {
+        return session;
     }
 
     /**
@@ -221,6 +249,26 @@ public class GroovyEditor extends AbstractDecoratedTextEditor implements ISaveab
         return viewer;
     }
 
+    /**
+     * Register the content assist action, so Ctrl+Space opens the completion.
+     */
+    @Override
+    protected void createActions() {
+        super.createActions();
+        ResourceBundle noResources = new ListResourceBundle() {
+            @Override
+            protected Object[][] getContents() {
+                return new Object[0][];
+            }
+        };
+        IAction action = new TextOperationAction(noResources, "ContentAssistProposal.", this,
+                ISourceViewer.CONTENTASSIST_PROPOSALS);
+        action.setText("Content Assist");
+        action.setActionDefinitionId(ITextEditorActionDefinitionIds.CONTENT_ASSIST_PROPOSALS);
+        setAction(CONTENT_ASSIST_ACTION, action);
+        markAsStateDependentAction(CONTENT_ASSIST_ACTION, true);
+    }
+
     @Override
     public int promptToSaveOnClose() {
         return ISaveablePart2.YES;
@@ -260,6 +308,7 @@ public class GroovyEditor extends AbstractDecoratedTextEditor implements ISaveab
         VerticalButton.create(sideToolBar, SWT.LEFT | SWT.PUSH, getSite(), GroovyEditorCommands.CMD_EXECUTE_SELECTION, false);
         VerticalButton.create(sideToolBar, SWT.LEFT | SWT.PUSH, getSite(), GroovyEditorCommands.CMD_EXECUTE_SCRIPT, false);
         VerticalButton.create(sideToolBar, SWT.LEFT | SWT.PUSH, getSite(), GroovyEditorCommands.CMD_CLEAR, false);
+        VerticalButton.create(sideToolBar, SWT.LEFT | SWT.PUSH, getSite(), GroovyEditorCommands.CMD_RESET_CONTEXT, false);
         UIUtils.createEmptyLabel(sideToolBar, 1, 1).setLayoutData(new GridData(GridData.FILL_VERTICAL));
         VerticalButton.create(sideToolBar, SWT.LEFT | SWT.PUSH, getSite(), GroovyEditorCommands.CMD_LIST_CLASSPATHS, false);
         VerticalButton.create(sideToolBar, SWT.LEFT | SWT.PUSH, getSite(), GroovyEditorCommands.CMD_ADD_DIR_TO_CLASSPATH, false);
@@ -288,33 +337,87 @@ public class GroovyEditor extends AbstractDecoratedTextEditor implements ISaveab
         }
     }
 
+    /**
+     * Execute the whole script.
+     */
     public void execute(){
-        this.doSave(new NullProgressMonitor());
         IDocument document = getDocument();
         if(document != null){
-            job = new GroovyJob(getPartName(), document.get());
-            job.schedule();
+            runScript(document.get());
         }
     }
 
+    /**
+     * Execute the selected text, or the current line if nothing is selected.
+     */
     public void executeSelection() {
-        this.doSave(new NullProgressMonitor());
         IDocument document = getDocument();
-        if(document != null){
-            ITextSelection selection = (ITextSelection) getSelectionProvider().getSelection();
-            if (!selection.getText().isEmpty()) {
-                job = new GroovyJob(getPartName(), selection.getText());
-                job.schedule();
+        if(document == null){
+            return;
+        }
+        ITextSelection selection = (ITextSelection) getSelectionProvider().getSelection();
+        String text = selection.getText();
+        if (text == null || text.isEmpty()) {
+            try {
+                IRegion line = document.getLineInformationOfOffset(selection.getOffset());
+                text = document.get(line.getOffset(), line.getLength());
+            } catch (BadLocationException e) {
+                LOGGER.warn("Unable to get the current line.", e);
+                return;
             }
         }
+        if (!text.isBlank()) {
+            runScript(text);
+        }
     }
 
+    private void runScript(String script) {
+        this.doSave(new NullProgressMonitor());
+        GroovyOutputConsole.show();
+        if (session.isRunning()) {
+            GroovyConsoleContent.appendLine("A script is already running in " + getScriptName()
+                    + ": stop it before running another one.", Style.ERROR);
+            return;
+        }
+        job = new GroovyJob(session, getScriptName(), script);
+        job.schedule();
+    }
+
+    private String getScriptName() {
+        return getEditorInput() != null ? getEditorInput().getName() : getPartName();
+    }
+
+    /**
+     * Stop the running script.
+     */
     public void stop(){
-        this.getRunningJob().cancel();
+        if (job != null) {
+            job.cancel();
+        }
+    }
+
+    /**
+     * Forget the variables, imports and libraries of the Groovy context.
+     */
+    public void resetContext() {
+        GroovyOutputConsole.show();
+        if (session.reset()) {
+            GroovyConsoleContent.appendLine("\n--- " + getScriptName() + ": context reset (variables, imports and @Grab libraries).", Style.INFO);
+        } else {
+            GroovyConsoleContent.appendLine("The context of " + getScriptName()
+                    + " cannot be reset while a script is running.", Style.ERROR);
+        }
     }
 
     public GroovyJob getRunningJob() {
         return job;
+    }
+
+    @Override
+    public void dispose() {
+        stop();
+        session.close();
+        super.dispose();
     }
 
 }

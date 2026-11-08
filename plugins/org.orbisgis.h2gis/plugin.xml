@@ -82,7 +82,7 @@
     </extension>
 
     <extension point="org.jkiss.dbeaver.mavenRepository">
-        <repository id="ossrh-snapshot" name="OSSRH snapshot repository" url="https://oss.sonatype.org/content/repositories/snapshots/" order="100"/>
+        <repository id="central-portal-snapshots" snapshot="true" name="Maven Central snapshots" url="https://central.sonatype.com/repository/maven-snapshots/" order="100"/>
     </extension>
 
 </plugin>
