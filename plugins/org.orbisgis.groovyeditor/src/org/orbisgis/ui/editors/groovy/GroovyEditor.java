@@ -24,11 +24,15 @@ import org.eclipse.jface.resource.ImageDescriptor;
 import org.eclipse.jface.text.BadLocationException;
 import org.eclipse.jface.text.IDocument;
 import org.eclipse.jface.text.IRegion;
+import org.eclipse.jface.text.Position;
+import org.eclipse.jface.text.source.Annotation;
+import org.eclipse.jface.text.source.IAnnotationModel;
 import org.eclipse.jface.text.ITextSelection;
 import org.eclipse.jface.text.ITextViewerExtension;
 import org.eclipse.jface.text.source.ISourceViewer;
 import org.eclipse.jface.text.source.IVerticalRuler;
 import org.eclipse.swt.SWT;
+import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.layout.GridData;
 import org.eclipse.swt.layout.GridLayout;
@@ -47,12 +51,14 @@ import org.orbisgis.core.logger.Logger;
 import org.orbisgis.ui.editors.groovy.GroovyOutputConsole.GroovyConsoleContent;
 import org.orbisgis.ui.editors.groovy.GroovyOutputConsole.Style;
 import org.orbisgis.ui.editors.groovy.session.GroovySession;
+import org.orbisgis.ui.editors.groovy.session.ScriptErrors.ScriptError;
 import org.orbisgis.ui.editors.groovy.syntax.GroovyPartitions;
 import org.orbisgis.ui.editors.groovy.syntax.GroovySourceViewerConfiguration;
 
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.ListResourceBundle;
 import java.util.ResourceBundle;
 
@@ -65,6 +71,12 @@ public class GroovyEditor extends AbstractDecoratedTextEditor implements ISaveab
     private static final int SIDE_TOOLBAR_VERTICAL_SPACING = 3;
 
     private static final String CONTENT_ASSIST_ACTION = "ContentAssistProposal";
+
+    /** Standard error annotation: red underline, marker in the ruler and the overview ruler */
+    private static final String ERROR_ANNOTATION_TYPE = "org.eclipse.ui.workbench.texteditor.error";
+
+    /** Errors of the last execution shown in the editor */
+    private final List<Annotation> errorAnnotations = new ArrayList<>();
 
     private GroovyJob job;
 
@@ -341,7 +353,7 @@ public class GroovyEditor extends AbstractDecoratedTextEditor implements ISaveab
     public void execute(){
         IDocument document = getDocument();
         if(document != null){
-            runScript(document.get());
+            runScript(document.get(), 0, 0);
         }
     }
 
@@ -355,22 +367,30 @@ public class GroovyEditor extends AbstractDecoratedTextEditor implements ISaveab
         }
         ITextSelection selection = (ITextSelection) getSelectionProvider().getSelection();
         String text = selection.getText();
-        if (text == null || text.isEmpty()) {
-            try {
+        int start = selection.getOffset();
+        try {
+            if (text == null || text.isEmpty()) {
                 IRegion line = document.getLineInformationOfOffset(selection.getOffset());
                 text = document.get(line.getOffset(), line.getLength());
-            } catch (BadLocationException e) {
-                LOGGER.warn("Unable to get the current line.", e);
-                return;
+                start = line.getOffset();
             }
-        }
-        if (!text.isBlank()) {
-            runScript(text);
+            if (!text.isBlank()) {
+                int firstLine = document.getLineOfOffset(start);
+                runScript(text, firstLine, start - document.getLineOffset(firstLine));
+            }
+        } catch (BadLocationException e) {
+            LOGGER.warn("Unable to get the text to execute.", e);
         }
     }
 
-    private void runScript(String script) {
+    /**
+     * @param script      the text to execute
+     * @param firstLine   line of the document where the text starts (from 0), to locate the errors
+     * @param firstColumn column of the document where the text starts (from 0)
+     */
+    private void runScript(String script, int firstLine, int firstColumn) {
         this.doSave(new NullProgressMonitor());
+        clearErrors();
         GroovyOutputConsole.show();
         if (session.isRunning()) {
             GroovyConsoleContent.appendLine("A script is already running in " + getScriptName()
@@ -378,7 +398,74 @@ public class GroovyEditor extends AbstractDecoratedTextEditor implements ISaveab
             return;
         }
         job = new GroovyJob(session, getScriptName(), script);
+        job.setErrorListener(errors -> Display.getDefault().asyncExec(() -> markErrors(errors, firstLine, firstColumn)));
         job.schedule();
+    }
+
+    /**
+     * Underline the errors of the last execution in the editor and show the first one.
+     */
+    private void markErrors(List<ScriptError> errors, int firstLine, int firstColumn) {
+        IDocument document = getDocument();
+        IAnnotationModel model = getAnnotationModel();
+        if (document == null || model == null) {
+            return;
+        }
+        clearErrors();
+        Position first = null;
+        for (ScriptError error : errors) {
+            try {
+                int line = firstLine + error.line() - 1;
+                if (line < 0 || line >= document.getNumberOfLines()) {
+                    continue;
+                }
+                IRegion lineRegion = document.getLineInformation(line);
+                int offset;
+                int length;
+                if (error.column() > 0) {
+                    // Syntax error: from its column (the first line of a selection may not start at column 0)
+                    int column = error.column() - 1 + (error.line() == 1 ? firstColumn : 0);
+                    offset = lineRegion.getOffset() + Math.min(column, lineRegion.getLength());
+                    int end = error.endLine() == error.line() && error.endColumn() > error.column()
+                            ? offset + error.endColumn() - error.column()
+                            : lineRegion.getOffset() + lineRegion.getLength();
+                    length = Math.max(1, Math.min(end, lineRegion.getOffset() + lineRegion.getLength()) - offset);
+                } else {
+                    // Runtime error: the whole line, without its indentation
+                    String text = document.get(lineRegion.getOffset(), lineRegion.getLength());
+                    int indent = text.length() - text.stripLeading().length();
+                    offset = lineRegion.getOffset() + indent;
+                    length = text.strip().length();
+                }
+                Annotation annotation = new Annotation(ERROR_ANNOTATION_TYPE, false, error.message());
+                Position position = new Position(offset, length);
+                model.addAnnotation(annotation, position);
+                errorAnnotations.add(annotation);
+                if (first == null) {
+                    first = position;
+                }
+            } catch (BadLocationException e) {
+                LOGGER.trace("Error outside of the document", e);
+            }
+        }
+        if (first != null && getSourceViewer() != null) {
+            getSourceViewer().revealRange(first.getOffset(), first.getLength());
+        }
+    }
+
+    /**
+     * Remove the errors of the last execution from the editor.
+     */
+    private void clearErrors() {
+        IAnnotationModel model = getAnnotationModel();
+        if (model != null) {
+            errorAnnotations.forEach(model::removeAnnotation);
+        }
+        errorAnnotations.clear();
+    }
+
+    private IAnnotationModel getAnnotationModel() {
+        return getDocumentProvider() == null ? null : getDocumentProvider().getAnnotationModel(getEditorInput());
     }
 
     private String getScriptName() {
@@ -399,6 +486,7 @@ public class GroovyEditor extends AbstractDecoratedTextEditor implements ISaveab
      */
     public void resetContext() {
         GroovyOutputConsole.show();
+        clearErrors();
         if (session.reset()) {
             GroovyConsoleContent.appendLine("\n--- " + getScriptName() + ": context reset (variables, imports and @Grab libraries).", Style.INFO);
         } else {

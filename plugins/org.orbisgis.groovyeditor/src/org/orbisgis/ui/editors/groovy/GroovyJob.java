@@ -34,11 +34,15 @@ import org.orbisgis.core.logger.Logger;
 import org.orbisgis.ui.editors.groovy.GroovyOutputConsole.GroovyConsoleContent;
 import org.orbisgis.ui.editors.groovy.GroovyOutputConsole.Style;
 import org.orbisgis.ui.editors.groovy.session.GroovySession;
+import org.orbisgis.ui.editors.groovy.session.ScriptErrors;
+import org.orbisgis.ui.editors.groovy.session.ScriptErrors.ScriptError;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
+import java.util.function.Consumer;
 
 /**
  * Job running a script in the Groovy session of an editor.
@@ -57,6 +61,7 @@ public class GroovyJob extends Job {
     private final GroovySession session;
     private final String script;
     private final String scriptName;
+    private Consumer<List<ScriptError>> errorListener;
 
     public GroovyJob(GroovySession session, String scriptName, String script) {
         super("Groovy: " + scriptName);
@@ -64,6 +69,13 @@ public class GroovyJob extends Job {
         this.script = script;
         this.scriptName = scriptName;
         setUser(false);
+    }
+
+    /**
+     * @param errorListener called with the positions of the error in the script when the script fails
+     */
+    public void setErrorListener(Consumer<List<ScriptError>> errorListener) {
+        this.errorListener = errorListener;
     }
 
     @Override
@@ -99,6 +111,11 @@ public class GroovyJob extends Job {
             if (cancelled) {
                 GroovyConsoleContent.appendLine("Script stopped (" + duration + ").", Style.ERROR);
             } else {
+                // Locate the error before formatting it: the stack trace is cleaned when it is formatted
+                List<ScriptError> errors = ScriptErrors.locate(runner.error, scriptName);
+                if (errorListener != null && !errors.isEmpty()) {
+                    errorListener.accept(errors);
+                }
                 GroovyConsoleContent.append(formatError(runner.error), Style.ERROR);
                 GroovyConsoleContent.appendLine("Error while executing the Groovy script (" + duration + ").", Style.ERROR);
             }

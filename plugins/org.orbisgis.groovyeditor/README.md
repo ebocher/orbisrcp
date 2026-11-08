@@ -182,6 +182,8 @@ h2gis.getSpatialTable("pts").each { println it.the_geom.buffer(10).area }
   Ivy configuration in `~/.groovy/grapeConfig.xml`.
 - The proxy settings of DBeaver (`Preferences` > `Network Connections`) are used.
 - A cached `-SNAPSHOT` version is not updated automatically: delete its folder in `~/.groovy/grapes` to get a newer one.
+- When a script fails, the line of the error is underlined in red in the editor (from its column for a syntax
+  error), with a marker in the margin; hover it to read the error. The marks are removed at the next execution.
 - The **Classpath** button lists the libraries of the console: the `@Grab` libraries with their dependencies,
   group and version, and the jars or folders added by hand (for a jar not published on Maven). `Copy list` copies
   it, for instance to report a version conflict.
