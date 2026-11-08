@@ -35,6 +35,7 @@ public class ConsoleWriter extends Writer {
     private final StringBuilder buffer = new StringBuilder();
     private final Style style;
     private boolean drainScheduled = false;
+    private volatile long writtenChars = 0;
 
     public ConsoleWriter(Style style) {
         this.style = style;
@@ -43,12 +44,20 @@ public class ConsoleWriter extends Writer {
     @Override
     public void write(char[] chars, int offset, int length) {
         synchronized (buffer) {
+            writtenChars += length;
             buffer.append(chars, offset, length);
             if (!drainScheduled) {
                 drainScheduled = true;
                 Display.getDefault().asyncExec(this::drain);
             }
         }
+    }
+
+    /**
+     * @return the number of characters written since the creation of the writer
+     */
+    public long getWrittenChars() {
+        return writtenChars;
     }
 
     private void drain() {

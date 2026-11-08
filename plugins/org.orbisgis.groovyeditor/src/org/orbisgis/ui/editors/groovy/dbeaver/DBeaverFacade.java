@@ -31,6 +31,7 @@ import org.jkiss.dbeaver.model.DBPDataSource;
 import org.jkiss.dbeaver.model.DBPDataSourceContainer;
 import org.jkiss.dbeaver.model.app.DBPPlatform;
 import org.jkiss.dbeaver.model.app.DBPProject;
+import org.jkiss.dbeaver.model.connection.DBPConnectionConfiguration;
 import org.jkiss.dbeaver.model.exec.DBCExecutionContext;
 import org.jkiss.dbeaver.model.impl.jdbc.JDBCExecutionContext;
 import org.jkiss.dbeaver.model.navigator.DBNDatabaseNode;
@@ -52,7 +53,9 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.StringJoiner;
 import java.util.concurrent.Callable;
 
@@ -249,12 +252,14 @@ public class DBeaverFacade implements AutoCloseable {
     /**
      * Run a query on a connection of the Database Navigator.
      *
+     * The PostGIS geometries are returned as JTS geometries (with their SRID): {@code row.the_geom.area}.
+     *
      * @return the rows; the values can be read by column name: {@code row.name} or {@code row['name']}
      */
     public List<GroovyRowResult> query(Object datasource, String query) throws DBException, SQLException {
         Connection connection = connection(datasource);
         try {
-            return new Sql(connection).rows(query);
+            return convertGeometries(new Sql(connection).rows(query));
         } finally {
             closeConnection(connection);
         }
@@ -267,10 +272,56 @@ public class DBeaverFacade implements AutoCloseable {
     public List<GroovyRowResult> query(Object datasource, String query, List<Object> params) throws DBException, SQLException {
         Connection connection = connection(datasource);
         try {
-            return new Sql(connection).rows(query, params);
+            return convertGeometries(new Sql(connection).rows(query, params));
         } finally {
             closeConnection(connection);
         }
+    }
+
+    private static List<GroovyRowResult> convertGeometries(List<GroovyRowResult> rows) {
+        for (GroovyRowResult row : rows) {
+            for (Map.Entry<String, Object> entry : row.entrySet()) {
+                entry.setValue(GeometryConverter.toGeometry(entry.getValue()));
+            }
+        }
+        return rows;
+    }
+
+    /**
+     * Connection parameters of a connection of the Database Navigator: {@code url}, {@code user} and
+     * {@code password} (the password saved in DBeaver, or typed when connecting).
+     *
+     * A library can open its own connection with them, with its own JDBC driver. For instance, orbisdata
+     * converts the PostGIS geometries to JTS only with its own driver:
+     * {@code POSTGIS.open(dbeaver.connectionProperties("my base"))}.
+     *
+     * When the connection uses an SSH tunnel, the URL goes through the tunnel opened by DBeaver: DBeaver must
+     * stay connected.
+     */
+    public Map<String, String> connectionProperties(Object datasource) throws DBException {
+        // Connecting resolves the credentials (asked if they are not saved) and the tunnels
+        DBPDataSourceContainer container = connect(datasource);
+        DBPConnectionConfiguration configuration = container.getActualConnectionConfiguration();
+        String url = configuration.getUrl();
+        if (url == null || url.isBlank()) {
+            url = container.getDriver().getConnectionURL(configuration);
+        }
+        Map<String, String> properties = new LinkedHashMap<>();
+        properties.put("url", url);
+        if (configuration.getUserName() != null && !configuration.getUserName().isEmpty()) {
+            properties.put("user", configuration.getUserName());
+        }
+        if (configuration.getUserPassword() != null) {
+            properties.put("password", configuration.getUserPassword());
+        }
+        return properties;
+    }
+
+    /**
+     * @return the JDBC URL of a connection of the Database Navigator
+     */
+    public String jdbcUrl(Object datasource) throws DBException {
+        return connectionProperties(datasource).get("url");
     }
 
     /**
@@ -447,8 +498,12 @@ public class DBeaverFacade implements AutoCloseable {
         help.add("  dbeaver.connection(datasource)   new JDBC connection (closed on reset)");
         help.add("  dbeaver.sql(datasource)          groovy.sql.Sql on a new JDBC connection");
         help.add("  dbeaver.query(datasource, sql)   rows of a query, e.g. .each { println it.name }");
+        help.add("                                   (PostGIS geometries are returned as JTS geometries)");
         help.add("  dbeaver.query(datasource, sql, [params])");
         help.add("  dbeaver.execute(datasource, sql) run a statement, returns the number of updated rows");
+        help.add("  dbeaver.connectionProperties(datasource)  [url, user, password] for a library, e.g.");
+        help.add("                                   POSTGIS.open(dbeaver.connectionProperties(datasource))");
+        help.add("  dbeaver.jdbcUrl(datasource)      JDBC URL of the connection");
         help.add("  dbeaver.selection                objects selected in the Database Navigator");
         help.add("  dbeaver.selectedObject           first selected object");
         help.add("  dbeaver.selectedDatasource       connection of the selection");

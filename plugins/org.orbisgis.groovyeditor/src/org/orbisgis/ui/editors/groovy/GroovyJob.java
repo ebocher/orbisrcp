@@ -71,6 +71,7 @@ public class GroovyJob extends Job {
         monitor.beginTask("Running " + scriptName, IProgressMonitor.UNKNOWN);
         GroovyConsoleContent.appendLine("\n--- " + scriptName + " (" + LocalTime.now().format(TIME_FORMAT) + ")", Style.INFO);
 
+        long printedBefore = session.getPrintedChars();
         Runner runner = new Runner();
         Thread thread = new Thread(runner, "Groovy script " + scriptName);
         thread.setDaemon(true);
@@ -103,7 +104,9 @@ public class GroovyJob extends Job {
             }
             return cancelled ? Status.CANCEL_STATUS : Status.OK_STATUS;
         }
-        if (runner.result != null) {
+        // The value of the last expression is shown when the script printed nothing: a script ending with
+        // list.each { println it } does not need the list again
+        if (runner.result != null && session.getPrintedChars() == printedBefore) {
             GroovyConsoleContent.appendLine("Result: " + formatResult(runner.result), Style.RESULT);
         }
         GroovyConsoleContent.appendLine("Groovy script successfully executed (" + duration + ").", Style.SUCCESS);

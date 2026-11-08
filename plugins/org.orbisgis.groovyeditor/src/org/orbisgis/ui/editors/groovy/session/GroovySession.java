@@ -94,6 +94,7 @@ public class GroovySession implements AutoCloseable {
     private final Consumer<URL> classPathListener = this::addClassPath;
 
     private GroovyShell shell;
+    private ConsoleWriter output;
     private ImportCustomizer importCustomizer;
     private ReplCustomizers.ImportCollector importCollector;
     private final Set<Object> knownImports = Collections.synchronizedSet(new LinkedHashSet<>());
@@ -106,7 +107,8 @@ public class GroovySession implements AutoCloseable {
 
     private void createShell() {
         Binding binding = new Binding();
-        binding.setVariable(VAR_OUT, new PrintWriter(new ConsoleWriter(Style.OUTPUT), true));
+        output = new ConsoleWriter(Style.OUTPUT);
+        binding.setVariable(VAR_OUT, new PrintWriter(output, true));
         binding.setVariable(VAR_LOGGER, new GroovyLogger(GroovyShell.class));
         for (BindingContributor contributor : CONTRIBUTORS) {
             try {
@@ -175,6 +177,13 @@ public class GroovySession implements AutoCloseable {
             thread.setContextClassLoader(previousContextClassLoader);
             running = false;
         }
+    }
+
+    /**
+     * @return the number of characters printed by the scripts of this context (println...)
+     */
+    public long getPrintedChars() {
+        return output.getWrittenChars();
     }
 
     /**

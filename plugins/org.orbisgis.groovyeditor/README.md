@@ -99,7 +99,7 @@ println start.plusDays(square(3))
   The declarations inside a block (closure, loop, `if`...), the multiple assignments (`def (a, b) = ...`) and the
   annotated declarations (`@Field`) stay local to the execution.
 - The libraries loaded with `@Grab` or added to the classpath stay loaded.
-- The value of the last expression is printed in the output view (`Result: ...`).
+- The value of the last expression is printed in the output view (`Result: ...`) when the script printed nothing.
 - The **Reset the Groovy context** button forgets the variables, imports and libraries.
 - The completion uses the context: run a line, then type `variable.` to see its methods and properties
   (including the Groovy methods such as `each` or `collect`), or `ClassName.` for the static members of a class.
@@ -128,8 +128,12 @@ dbeaver.refresh("Ma base PostGIS")                    // show the new table in t
 def sql = dbeaver.sql("Ma base PostGIS")
 sql.eachRow("select nom from communes") { println it.nom }
 
-// A JDBC connection for a library, for instance orbisdata
-def postgis = org.orbisgis.data.POSTGIS.open(dbeaver.connection("Ma base PostGIS"))
+// PostGIS geometries are returned as JTS geometries, with their SRID
+dbeaver.query("Ma base PostGIS", "select the_geom from communes limit 5").each { println it.the_geom.area }
+
+// A library opening its own connection with the DBeaver settings, for instance orbisdata
+def postgis = org.orbisgis.data.POSTGIS.open(dbeaver.connectionProperties("Ma base PostGIS"))
+postgis.eachRow("select the_geom from communes limit 5") { println it.the_geom.buffer(10) }
 
 // The Database Navigator
 dbeaver.selection.each { println "${it.class.simpleName}: ${it.name}" }
@@ -144,8 +148,10 @@ dbeaver.inUI { /* code using the UI (views, dialogs...) */ }
 - `connection()` and `sql()` open a new connection, isolated from the SQL editors (like a new SQL editor). They are
   closed when the context of the console is reset or when the editor is closed. `query()` and `execute()` close
   their connection themselves.
-- The connection is created by the JDBC driver configured in DBeaver. A library using its own copy of the driver
-  (for instance to read PostGIS geometries with `PGConnection`) may not accept it: open its own connection then.
+- `connection()` and `sql()` use the JDBC driver configured in DBeaver. A library loaded with `@Grab` has its own
+  copy of the driver and may not use this connection fully: orbisdata, for instance, converts the PostGIS geometries
+  to JTS only with its own driver. Give it `dbeaver.connectionProperties(datasource)` (`url`, `user`, `password`)
+  instead, so it opens its own connection with the settings of DBeaver.
 - `dbeaver.inUI { }` runs code in the UI thread, needed by the UI parts of the Eclipse and DBeaver API. Keep it
   short: DBeaver is frozen while it runs.
 
