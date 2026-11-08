@@ -66,19 +66,9 @@
               name="Reset the Groovy context"> </command>
       <command
               categoryId="org.orbisgis.ui.editors.groovy"
-              description="List the current class paths"
+              description="Libraries of the console: @Grab libraries, added jars and folders"
               id="org.orbisgis.ui.editors.groovy.listClasspaths"
-              name="List the current class paths"> </command>
-      <command
-              categoryId="org.orbisgis.ui.editors.groovy"
-              description="Add directory to classPath"
-              id="org.orbisgis.ui.editors.groovy.addDirectoryToClasspaths"
-              name="Add directory to classPath"> </command>
-      <command
-              categoryId="org.orbisgis.ui.editors.groovy"
-              description="Add jar to classPath"
-              id="org.orbisgis.ui.editors.groovy.addJarToClasspath"
-              name="Add jar to classPath"> </command>
+              name="Classpath"> </command>
 
    </extension>
 
@@ -91,8 +81,6 @@
       <image commandId="org.orbisgis.ui.editors.groovy.stopProcess" icon="icons/stop.png"/>
       <image commandId="org.orbisgis.ui.editors.groovy.resetContext" icon="icons/reset.png"/>
       <image commandId="org.orbisgis.ui.editors.groovy.listClasspaths" icon="icons/show_classpath.png"/>
-      <image commandId="org.orbisgis.ui.editors.groovy.addDirectoryToClasspaths" icon="icons/folder_add.png"/>
-	  <image commandId="org.orbisgis.ui.editors.groovy.addJarToClasspath" icon="icons/add_jar.png"/>
    </extension>
 
    <extension point="org.eclipse.ui.handlers">
@@ -127,14 +115,6 @@
       <handler
               class="org.orbisgis.ui.editors.groovy.handlers.GroovyEditorActionHandler"
               commandId="org.orbisgis.ui.editors.groovy.listClasspaths">
-      </handler>
-      <handler
-              class="org.orbisgis.ui.editors.groovy.handlers.GroovyEditorActionHandler"
-              commandId="org.orbisgis.ui.editors.groovy.addDirectoryToClasspaths">
-      </handler>
-      <handler
-              class="org.orbisgis.ui.editors.groovy.handlers.GroovyEditorActionHandler"
-              commandId="org.orbisgis.ui.editors.groovy.addJarToClasspath">
       </handler>
    </extension>
 

@@ -54,6 +54,7 @@ Once DBeaver has restarted, select the main menu `Groovy Editor`, click on `Open
 | ![dbeaver_groovy_console_execute_all](https://github.com/orbisgis/geoclimate/blob/master/docs/resources/images/for_users/dbeaver_groovy_console_execute_all.png) |      Execute all the console      |
 | ![dbeaver_groovy_console_erase](https://github.com/orbisgis/geoclimate/blob/master/docs/resources/images/for_users/dbeaver_groovy_console_erase.png) |         Clear the console         |
 | ![reset](icons/reset.png) | Reset the Groovy context |
+| ![classpath](icons/show_classpath.png) | Classpath: libraries of the console (@Grab, added jars and folders) |
 
 Shortcuts: `Ctrl+Enter` executes the whole script, `Ctrl+Shift+Enter` executes the selection (or the current line if
 nothing is selected), `Ctrl+Space` opens the completion (it also opens after a `.`).
@@ -101,6 +102,8 @@ println start.plusDays(square(3))
 - The libraries loaded with `@Grab` or added to the classpath stay loaded.
 - The value of the last expression is printed in the output view (`Result: ...`) when the script printed nothing.
 - The **Reset the Groovy context** button forgets the variables, imports and libraries.
+- Right-click in the output view: Copy (the selection, or the whole output when nothing is selected), Select All
+  and Clear. `Ctrl+C` and `Ctrl+A` work too.
 - The completion uses the context: run a line, then type `variable.` to see its methods and properties
   (including the Groovy methods such as `each` or `collect`), or `ClassName.` for the static members of a class.
 
@@ -179,6 +182,9 @@ h2gis.getSpatialTable("pts").each { println it.the_geom.buffer(10).area }
   Ivy configuration in `~/.groovy/grapeConfig.xml`.
 - The proxy settings of DBeaver (`Preferences` > `Network Connections`) are used.
 - A cached `-SNAPSHOT` version is not updated automatically: delete its folder in `~/.groovy/grapes` to get a newer one.
+- The **Classpath** button lists the libraries of the console: the `@Grab` libraries with their dependencies,
+  group and version, and the jars or folders added by hand (for a jar not published on Maven). `Copy list` copies
+  it, for instance to report a version conflict.
 - When the Grape cache is incomplete (a jar missing, a library first found in `~/.m2` and removed since...), the
   console removes the cache entry and resolves the library again from the repositories.
 

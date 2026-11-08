@@ -19,13 +19,7 @@
  */
 package org.orbisgis.ui.editors.groovy;
 
-import org.eclipse.swt.SWT;
-import org.eclipse.swt.widgets.DirectoryDialog;
-import org.eclipse.swt.widgets.FileDialog;
-import org.eclipse.swt.widgets.Shell;
-import org.eclipse.ui.PlatformUI;
 import org.orbisgis.core.logger.Logger;
-import org.orbisgis.ui.editors.groovy.ui.ScrollableDialog;
 
 import java.io.File;
 import java.net.MalformedURLException;
@@ -37,7 +31,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 
 /**
- * Jars and directories added by the user to the classpath of the Groovy scripts.
+ * Jars and directories added by the user to the classpath of the Groovy scripts (see the Classpath dialog).
  *
  * A path added here is immediately available in the open Groovy sessions. A removed path stays loaded in
  * the open sessions until their context is reset.
@@ -51,34 +45,6 @@ public class ClassPathHandler {
 	private static final List<Consumer<URL>> listeners = new CopyOnWriteArrayList<>();
 
 	private ClassPathHandler() {
-	}
-
-	/**
-	 * Open a dialog showing the list of urls.
-	 */
-	public static void showClassPaths() {
-		Shell shell = PlatformUI.getWorkbench().getActiveWorkbenchWindow().getShell();
-		ScrollableDialog dialog = new ScrollableDialog(shell, "List of class paths", getUrls());
-		dialog.open();
-	}
-
-	/**
-	 * Add a directory path, chosen by the user, to the list of urls.
-	 */
-	public static void addDirPathToPathList() {
-		Shell shell = PlatformUI.getWorkbench().getActiveWorkbenchWindow().getShell();
-		DirectoryDialog dialog = new DirectoryDialog(shell);
-		addPathToUrlList(dialog.open());
-	}
-
-	/**
-	 * Add a jar path, chosen by the user, to the list of urls.
-	 */
-	public static void addJarPathToPathList() {
-		Shell shell = PlatformUI.getWorkbench().getActiveWorkbenchWindow().getShell();
-		FileDialog dialog = new FileDialog(shell, SWT.SINGLE);
-		dialog.setFilterExtensions(new String[]{"*.jar"});
-		addPathToUrlList(dialog.open());
 	}
 
 	/**

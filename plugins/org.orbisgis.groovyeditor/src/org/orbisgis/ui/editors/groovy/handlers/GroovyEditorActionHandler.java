@@ -34,7 +34,7 @@ import org.jkiss.dbeaver.model.navigator.DBNDataSource;
 import org.jkiss.dbeaver.ui.navigator.database.DatabaseNavigatorView;
 import org.jkiss.dbeaver.utils.RuntimeUtils;
 import org.orbisgis.core.logger.Logger;
-import org.orbisgis.ui.editors.groovy.ClassPathHandler;
+import org.orbisgis.ui.editors.groovy.ui.ClasspathDialog;
 import org.orbisgis.ui.editors.groovy.GroovyEditor;
 import org.orbisgis.ui.editors.groovy.GroovyEditorCommands;
 import org.orbisgis.ui.editors.groovy.GroovyOutputConsole.GroovyConsoleContent;
@@ -50,15 +50,6 @@ public class GroovyEditorActionHandler extends AbstractHandler {
         switch (actionId) {
             case GroovyEditorCommands.CMD_GROOVY_DELETE_OUTPUT:
                 GroovyConsoleContent.clear();
-                return null;
-            case GroovyEditorCommands.CMD_LIST_CLASSPATHS:
-                ClassPathHandler.showClassPaths();
-                return null;
-            case GroovyEditorCommands.CMD_ADD_DIR_TO_CLASSPATH:
-                ClassPathHandler.addDirPathToPathList();
-                return null;
-            case GroovyEditorCommands.CMD_ADD_JAR_TO_CLASSPATH:
-                ClassPathHandler.addJarPathToPathList();
                 return null;
             default:
                 break;
@@ -84,6 +75,10 @@ public class GroovyEditorActionHandler extends AbstractHandler {
                 break;
             case GroovyEditorCommands.CMD_RESET_CONTEXT:
                 editor.resetContext();
+                break;
+            case GroovyEditorCommands.CMD_LIST_CLASSPATHS:
+                new ClasspathDialog(HandlerUtil.getActiveShell(executionEvent), editor.getSession(),
+                        editor.getEditorInput().getName()).open();
                 break;
             default:
                 LOGGER.error("Unsupported Groovy editor command: " + actionId);

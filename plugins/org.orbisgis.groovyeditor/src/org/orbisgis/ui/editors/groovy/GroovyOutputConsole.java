@@ -18,18 +18,28 @@
  */
 package org.orbisgis.ui.editors.groovy;
 
+import org.eclipse.jface.action.Action;
+import org.eclipse.jface.action.IAction;
 import org.eclipse.jface.action.MenuManager;
+import org.eclipse.jface.action.Separator;
 import org.eclipse.jface.resource.JFaceResources;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.StyleRange;
 import org.eclipse.swt.custom.StyledText;
+import org.eclipse.swt.dnd.Clipboard;
+import org.eclipse.swt.dnd.TextTransfer;
+import org.eclipse.swt.dnd.Transfer;
 import org.eclipse.swt.layout.FillLayout;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Display;
+import org.eclipse.ui.IActionBars;
+import org.eclipse.ui.ISharedImages;
+import org.eclipse.ui.IWorkbenchCommandConstants;
 import org.eclipse.ui.IWorkbenchPage;
 import org.eclipse.ui.IWorkbenchWindow;
 import org.eclipse.ui.PartInitException;
 import org.eclipse.ui.PlatformUI;
+import org.eclipse.ui.actions.ActionFactory;
 import org.eclipse.ui.part.ViewPart;
 import org.jkiss.dbeaver.ui.ActionUtils;
 import org.jkiss.dbeaver.ui.UIUtils;
@@ -51,7 +61,7 @@ public class GroovyOutputConsole extends ViewPart {
 		Composite group = UIUtils.createPlaceholder(parent, 1);
 		group.setLayout(new FillLayout());
 		GroovyConsoleContent.initialize(group);
-		createDeleteOutputMenu(GroovyConsoleContent.text);
+		createContextMenu(GroovyConsoleContent.text);
 	}
 
 	@Override
@@ -62,12 +72,58 @@ public class GroovyOutputConsole extends ViewPart {
 	}
 
 	/**
-	 * Add a context menu to delete the groovy output content.
+	 * Context menu of the output: copy, select all, clear. Copy and Select All are also bound to the usual
+	 * shortcuts and to the Edit menu of DBeaver while the view is active.
 	 */
-	private void createDeleteOutputMenu(StyledText control) {
+	private void createContextMenu(StyledText control) {
+		ISharedImages images = PlatformUI.getWorkbench().getSharedImages();
+
+		IAction copyAction = new Action("Copy") {
+			@Override
+			public void run() {
+				if (control.getSelectionCount() > 0) {
+					control.copy();
+				} else {
+					// Nothing selected: copy the whole output
+					String all = control.getText();
+					if (!all.isEmpty()) {
+						Clipboard clipboard = new Clipboard(control.getDisplay());
+						try {
+							clipboard.setContents(new Object[]{all}, new Transfer[]{TextTransfer.getInstance()});
+						} finally {
+							clipboard.dispose();
+						}
+					}
+				}
+			}
+		};
+		copyAction.setActionDefinitionId(IWorkbenchCommandConstants.EDIT_COPY);
+		copyAction.setImageDescriptor(images.getImageDescriptor(ISharedImages.IMG_TOOL_COPY));
+
+		IAction selectAllAction = new Action("Select All") {
+			@Override
+			public void run() {
+				control.selectAll();
+			}
+		};
+		selectAllAction.setActionDefinitionId(IWorkbenchCommandConstants.EDIT_SELECT_ALL);
+
+		IActionBars actionBars = getViewSite().getActionBars();
+		actionBars.setGlobalActionHandler(ActionFactory.COPY.getId(), copyAction);
+		actionBars.setGlobalActionHandler(ActionFactory.SELECT_ALL.getId(), selectAllAction);
+		actionBars.updateActionBars();
+
 		final MenuManager menuMgr = new MenuManager();
 		menuMgr.setRemoveAllWhenShown(true);
-		menuMgr.addMenuListener(manager -> manager.add(ActionUtils.makeCommandContribution(getSite(), CLEAR_CMD_ID)));
+		menuMgr.addMenuListener(manager -> {
+			copyAction.setText(control.getSelectionCount() > 0 ? "Copy" : "Copy All");
+			copyAction.setEnabled(control.getCharCount() > 0);
+			selectAllAction.setEnabled(control.getCharCount() > 0);
+			manager.add(copyAction);
+			manager.add(selectAllAction);
+			manager.add(new Separator());
+			manager.add(ActionUtils.makeCommandContribution(getSite(), CLEAR_CMD_ID));
+		});
 		control.setMenu(menuMgr.createContextMenu(control));
 	}
 

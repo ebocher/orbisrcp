@@ -311,8 +311,6 @@ public class GroovyEditor extends AbstractDecoratedTextEditor implements ISaveab
         VerticalButton.create(sideToolBar, SWT.LEFT | SWT.PUSH, getSite(), GroovyEditorCommands.CMD_RESET_CONTEXT, false);
         UIUtils.createEmptyLabel(sideToolBar, 1, 1).setLayoutData(new GridData(GridData.FILL_VERTICAL));
         VerticalButton.create(sideToolBar, SWT.LEFT | SWT.PUSH, getSite(), GroovyEditorCommands.CMD_LIST_CLASSPATHS, false);
-        VerticalButton.create(sideToolBar, SWT.LEFT | SWT.PUSH, getSite(), GroovyEditorCommands.CMD_ADD_DIR_TO_CLASSPATH, false);
-        VerticalButton.create(sideToolBar, SWT.LEFT | SWT.PUSH, getSite(), GroovyEditorCommands.CMD_ADD_JAR_TO_CLASSPATH, false);
 
         GridLayout layout = (GridLayout)sideToolBar.getLayout();
         layout.marginTop = SIDE_TOOLBAR_MARGIN_TOP;
