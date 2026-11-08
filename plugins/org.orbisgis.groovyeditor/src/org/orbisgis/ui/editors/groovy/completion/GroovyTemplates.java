@@ -20,6 +20,8 @@ package org.orbisgis.ui.editors.groovy.completion;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
+import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -85,7 +87,7 @@ public final class GroovyTemplates {
     );
 
     /** A pattern applying to an object: ${variable}.rest */
-    private static final Pattern RECEIVER_PATTERN = Pattern.compile("^\\$\\{\\w+}\\.(.*)$", Pattern.DOTALL);
+    private static final Pattern RECEIVER_PATTERN = Pattern.compile("^\\$\\{(\\w+)}\\.(.*)$", Pattern.DOTALL);
 
     private GroovyTemplates() {
     }
@@ -96,6 +98,17 @@ public final class GroovyTemplates {
      * @return the templates to propose at this position
      */
     public static List<Match> match(String text, int offset) {
+        return match(text, offset, receiver -> Optional.empty());
+    }
+
+    /**
+     * @param text     the script
+     * @param offset   the position of the cursor
+     * @param receiver gives the value of the object before the point, if it is known
+     * @return the templates to propose at this position; after a point, the templates applying to an object
+     * of another kind are not proposed ({@code dbeaver.} does not give {@code each})
+     */
+    public static List<Match> match(String text, int offset, Function<Integer, Optional<Object>> receiver) {
         int start = offset;
         while (start > 0 && Character.isJavaIdentifierPart(text.charAt(start - 1))) {
             start--;
@@ -122,8 +135,12 @@ public final class GroovyTemplates {
                 if (!matcher.matches()) {
                     continue;
                 }
+                Optional<Object> value = receiver.apply(offset);
+                if (value.isPresent() && !Receivers.acceptsTemplate(matcher.group(1), value.get())) {
+                    continue;
+                }
                 // The object is already written: insert the method call only
-                pattern = matcher.group(1);
+                pattern = matcher.group(2);
             }
             matches.add(new Match(template.name(), template.description(), indent(pattern, indent),
                     start, offset - start));

@@ -37,6 +37,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.Supplier;
@@ -148,6 +149,32 @@ public class GroovyCompletionProcessor implements IContentAssistProcessor {
         return end;
     }
 
+    /**
+     * @param text   the script
+     * @param offset a position after a point
+     * @return the value of the variable written before the point, if the context has it: empty if the object is
+     * unknown (not a variable, or not run yet)
+     */
+    public Optional<Object> receiverValue(String text, int offset) {
+        int start = offset;
+        while (start > 0 && Character.isJavaIdentifierPart(text.charAt(start - 1))) {
+            start--;
+        }
+        if (start == 0 || text.charAt(start - 1) != '.') {
+            return Optional.empty();
+        }
+        String receiver = receiverBefore(text, start - 1);
+        GroovySession context = session.get();
+        if (receiver.isEmpty() || receiver.contains(".") || context == null) {
+            return Optional.empty();
+        }
+        Map<String, Object> variables = context.getVariables();
+        if (!variables.containsKey(receiver) || variables.get(receiver) == null) {
+            return Optional.empty();
+        }
+        return Optional.of(variables.get(receiver));
+    }
+
     // ---------------------------------------------------------------- receiver.member
 
     private void addMemberProposals(List<ComplProposal> proposals, GroovySession context, String receiver,
@@ -181,8 +208,14 @@ public class GroovyCompletionProcessor implements IContentAssistProcessor {
         }
         List<MetaMethod> methods = new ArrayList<>(metaClass.getMethods());
         methods.addAll(metaClass.getMetaMethods());
+        boolean iterable = Receivers.isIterable(value);
         for (MetaMethod method : methods) {
             if (!method.isPublic() || method.getName().contains("$") || method.getName().startsWith("<")) {
+                continue;
+            }
+            // each, collect... added by Groovy to all the objects: only on the objects which can be iterated
+            if (!iterable && method.getDeclaringClass().getTheClass() == Object.class
+                    && Receivers.ITERATION_METHODS.contains(method.getName())) {
                 continue;
             }
             addMethod(proposals, seen, method.getName(), method.getNativeParameterTypes(), method.getReturnType(),

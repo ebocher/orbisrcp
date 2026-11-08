@@ -31,12 +31,27 @@ import org.eclipse.swt.graphics.Image;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
+import java.util.function.BiFunction;
 
 /**
  * Proposes the templates of {@link GroovyTemplates}. Inserting a template starts the linked mode: the fields
  * are edited together and Tab goes to the next one, Enter ends the edition.
  */
 public class GroovyTemplateProcessor extends TemplateCompletionProcessor {
+
+    private final BiFunction<String, Integer, Optional<Object>> receiver;
+
+    /**
+     * @param receiver gives the value of the object before a point, if it is known
+     */
+    public GroovyTemplateProcessor(BiFunction<String, Integer, Optional<Object>> receiver) {
+        this.receiver = receiver;
+    }
+
+    public GroovyTemplateProcessor() {
+        this((text, offset) -> Optional.empty());
+    }
 
     public static final String CONTEXT_TYPE_ID = "org.orbisgis.ui.editors.groovy.templates";
 
@@ -53,7 +68,8 @@ public class GroovyTemplateProcessor extends TemplateCompletionProcessor {
      */
     public List<ICompletionProposal> computeTemplateProposals(ITextViewer viewer, int offset) {
         List<ICompletionProposal> proposals = new ArrayList<>();
-        for (GroovyTemplates.Match match : GroovyTemplates.match(viewer.getDocument().get(), offset)) {
+        String text = viewer.getDocument().get();
+        for (GroovyTemplates.Match match : GroovyTemplates.match(text, offset, at -> receiver.apply(text, at))) {
             Template template = new Template(match.name(), match.description(), CONTEXT_TYPE_ID, match.pattern(), false);
             IRegion region = new Region(match.replaceOffset(), match.replaceLength());
             TemplateContext context = createContext(viewer, region);
