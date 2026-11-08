@@ -70,6 +70,14 @@ nothing is selected), `Ctrl+Space` opens the completion (it also opens after a `
 - The indentation (tab width, spaces or tabs) is the one of the text editors: *Window > Preferences > Editors >
   Text Editors* ("Displayed tab width", "Insert spaces for tabs").
 
+### Brackets
+
+- With the cursor next to a parenthesis, a bracket or a brace, the matching one is boxed. The brackets of the strings
+  and of the comments are ignored.
+- A bracket without a matching one (an extra `]`, a `(` not closed) is marked as an error while typing.
+- When a script does not compile because of a bracket, the console shows the bracket without a matching one and
+  marks it, instead of the place where Groovy gave up (often the start of the call: `vegalite(`).
+
 ### Templates
 
 Type the beginning of a template name and press `Ctrl+Space`: the template is inserted, `Tab` moves to the next

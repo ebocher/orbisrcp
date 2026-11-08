@@ -19,6 +19,7 @@
 package org.orbisgis.ui.editors.groovy;
 
 import org.codehaus.groovy.control.MultipleCompilationErrorsException;
+import org.orbisgis.ui.editors.groovy.syntax.BracketChecker;
 import org.codehaus.groovy.control.messages.ExceptionMessage;
 import org.codehaus.groovy.control.messages.Message;
 import org.codehaus.groovy.control.messages.SimpleMessage;
@@ -41,6 +42,7 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -113,6 +115,19 @@ public class GroovyJob extends Job {
             } else {
                 // Locate the error before formatting it: the stack trace is cleaned when it is formatted
                 List<ScriptError> errors = ScriptErrors.locate(runner.error, scriptName);
+                // A missing or extra bracket is reported by Groovy where it gives up, often far away (at the
+                // start of the call): the brackets without a matching one are shown instead
+                List<BracketChecker.Problem> brackets = isSyntaxError(runner.error)
+                        ? BracketChecker.check(script) : List.of();
+                if (!brackets.isEmpty()) {
+                    errors = new ArrayList<>();
+                    for (BracketChecker.Problem problem : brackets) {
+                        errors.add(new ScriptError(problem.line(), problem.column(), problem.line(),
+                                problem.column() + 1, problem.message()));
+                        GroovyConsoleContent.appendLine(problem.message() + " (line " + problem.line()
+                                + ", column " + problem.column() + ")", Style.ERROR);
+                    }
+                }
                 if (errorListener != null && !errors.isEmpty()) {
                     errorListener.accept(errors);
                 }
@@ -128,6 +143,11 @@ public class GroovyJob extends Job {
         }
         GroovyConsoleContent.appendLine("Groovy script successfully executed (" + duration + ").", Style.SUCCESS);
         return Status.OK_STATUS;
+    }
+
+    private static boolean isSyntaxError(Throwable error) {
+        return error instanceof MultipleCompilationErrorsException compilationErrors
+                && compilationErrors.getErrorCollector().getErrors().stream().anyMatch(m -> m instanceof SyntaxErrorMessage);
     }
 
     private static String formatResult(Object result) {

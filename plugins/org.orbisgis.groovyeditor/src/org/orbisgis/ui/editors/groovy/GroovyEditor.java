@@ -23,6 +23,18 @@ import org.eclipse.jface.action.Action;
 import org.eclipse.jface.action.IAction;
 import org.eclipse.jface.action.IMenuManager;
 import org.eclipse.jface.resource.ImageDescriptor;
+import org.eclipse.jface.preference.IPreferenceStore;
+import org.eclipse.jface.preference.PreferenceConverter;
+import org.eclipse.jface.preference.PreferenceStore;
+import org.eclipse.jface.text.DocumentEvent;
+import org.eclipse.jface.text.IDocumentListener;
+import org.eclipse.jface.text.source.DefaultCharacterPairMatcher;
+import org.eclipse.swt.graphics.RGB;
+import org.eclipse.ui.editors.text.EditorsUI;
+import org.eclipse.ui.texteditor.ChainedPreferenceStore;
+import org.eclipse.ui.texteditor.SourceViewerDecorationSupport;
+import org.jkiss.dbeaver.ui.UIStyles;
+import org.orbisgis.ui.editors.groovy.syntax.BracketChecker;
 import org.eclipse.jface.text.BadLocationException;
 import org.eclipse.jface.text.IDocument;
 import org.eclipse.jface.text.IRegion;
@@ -86,6 +98,37 @@ public class GroovyEditor extends AbstractDecoratedTextEditor implements ISaveab
 
     /** Errors of the last execution shown in the editor */
     private final List<Annotation> errorAnnotations = new ArrayList<>();
+
+    /** Brackets without a matching one, marked while typing */
+    private final List<Annotation> bracketAnnotations = new ArrayList<>();
+
+    /** Delay of the bracket check after the last change (ms) */
+    private static final int BRACKET_CHECK_DELAY = 500;
+
+    private final Runnable bracketCheck = this::checkBrackets;
+
+    private final IDocumentListener bracketListener = new IDocumentListener() {
+        @Override
+        public void documentAboutToBeChanged(DocumentEvent event) {
+        }
+
+        @Override
+        public void documentChanged(DocumentEvent event) {
+            Display display = Display.getCurrent();
+            if (display != null) {
+                display.timerExec(-1, bracketCheck);
+                display.timerExec(BRACKET_CHECK_DELAY, bracketCheck);
+            }
+        }
+    };
+
+    private IDocument checkedDocument;
+
+    /** Preferences of the bracket highlighting, before the ones of the text editors */
+    private static final String MATCHING_BRACKETS = "org.orbisgis.groovyeditor.matchingBrackets";
+    private static final String MATCHING_BRACKETS_COLOR = "org.orbisgis.groovyeditor.matchingBracketsColor";
+    private static final String BRACKET_AT_CARET = "org.orbisgis.groovyeditor.highlightBracketAtCaret";
+    private static final String ENCLOSING_BRACKETS = "org.orbisgis.groovyeditor.enclosingBrackets";
 
     private GroovyJob job;
 
@@ -379,6 +422,66 @@ public class GroovyEditor extends AbstractDecoratedTextEditor implements ISaveab
         GroovyEditorControl editorControl = new GroovyEditorControl(groovyEditor, this);
         super.createPartControl(editorControl);
         editorControl.setLayoutData(new GridData(GridData.FILL_BOTH));
+
+        checkedDocument = getDocument();
+        if (checkedDocument != null) {
+            checkedDocument.addDocumentListener(bracketListener);
+            checkBrackets();
+        }
+    }
+
+    @Override
+    protected void initializeEditor() {
+        super.initializeEditor();
+        // The bracket highlighting has its own settings; the other ones are those of the text editors
+        setPreferenceStore(new ChainedPreferenceStore(new IPreferenceStore[]{bracketPreferences(),
+                EditorsUI.getPreferenceStore()}));
+    }
+
+    private static IPreferenceStore bracketPreferences() {
+        PreferenceStore store = new PreferenceStore();
+        store.setDefault(MATCHING_BRACKETS, true);
+        store.setDefault(BRACKET_AT_CARET, true);
+        store.setDefault(ENCLOSING_BRACKETS, false);
+        boolean dark;
+        try {
+            dark = UIStyles.isDarkTheme();
+        } catch (RuntimeException | LinkageError e) {
+            dark = false;
+        }
+        PreferenceConverter.setDefault(store, MATCHING_BRACKETS_COLOR, dark ? new RGB(150, 150, 150) : new RGB(128, 128, 128));
+        return store;
+    }
+
+    /**
+     * The bracket matching the one at the cursor is boxed. The brackets of the strings and of the comments are
+     * ignored (Groovy partitioning).
+     */
+    @Override
+    protected void configureSourceViewerDecorationSupport(SourceViewerDecorationSupport support) {
+        support.setCharacterPairMatcher(new DefaultCharacterPairMatcher(
+                new char[]{'(', ')', '[', ']', '{', '}'}, GroovyPartitions.PARTITIONING, true));
+        support.setMatchingCharacterPainterPreferenceKeys(MATCHING_BRACKETS, MATCHING_BRACKETS_COLOR,
+                BRACKET_AT_CARET, ENCLOSING_BRACKETS);
+        super.configureSourceViewerDecorationSupport(support);
+    }
+
+    /**
+     * Mark the brackets without a matching one (a missing or extra bracket).
+     */
+    private void checkBrackets() {
+        IAnnotationModel model = getAnnotationModel();
+        IDocument document = getDocument();
+        if (model == null || document == null || getSourceViewer() == null) {
+            return;
+        }
+        bracketAnnotations.forEach(model::removeAnnotation);
+        bracketAnnotations.clear();
+        for (BracketChecker.Problem problem : BracketChecker.check(document)) {
+            Annotation annotation = new Annotation(ERROR_ANNOTATION_TYPE, false, problem.message());
+            model.addAnnotation(annotation, new Position(problem.offset(), 1));
+            bracketAnnotations.add(annotation);
+        }
     }
 
     private void createControlsBar(Composite editorPanel) {
@@ -515,8 +618,12 @@ public class GroovyEditor extends AbstractDecoratedTextEditor implements ISaveab
                     offset = lineRegion.getOffset() + indent;
                     length = text.strip().length();
                 }
-                Annotation annotation = new Annotation(ERROR_ANNOTATION_TYPE, false, error.message());
                 Position position = new Position(offset, length);
+                if (isBracketMarked(model, offset)) {
+                    first = first == null ? position : first;
+                    continue;
+                }
+                Annotation annotation = new Annotation(ERROR_ANNOTATION_TYPE, false, error.message());
                 model.addAnnotation(annotation, position);
                 errorAnnotations.add(annotation);
                 if (first == null) {
@@ -529,6 +636,16 @@ public class GroovyEditor extends AbstractDecoratedTextEditor implements ISaveab
         if (first != null && getSourceViewer() != null) {
             getSourceViewer().revealRange(first.getOffset(), first.getLength());
         }
+    }
+
+    private boolean isBracketMarked(IAnnotationModel model, int offset) {
+        for (Annotation annotation : bracketAnnotations) {
+            Position position = model.getPosition(annotation);
+            if (position != null && position.getOffset() == offset) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -579,6 +696,13 @@ public class GroovyEditor extends AbstractDecoratedTextEditor implements ISaveab
 
     @Override
     public void dispose() {
+        if (checkedDocument != null) {
+            checkedDocument.removeDocumentListener(bracketListener);
+        }
+        Display display = Display.getCurrent();
+        if (display != null) {
+            display.timerExec(-1, bracketCheck);
+        }
         stop();
         session.close();
         super.dispose();
