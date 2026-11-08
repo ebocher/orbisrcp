@@ -22,6 +22,7 @@ import org.eclipse.ui.plugin.AbstractUIPlugin;
 import org.orbisgis.core.CoreActivator;
 import org.orbisgis.ui.editors.groovy.dbeaver.DBeaverFacade;
 import org.orbisgis.ui.editors.groovy.html.HtmlPages;
+import org.orbisgis.ui.editors.groovy.html.VegaLiteFunction;
 import org.orbisgis.ui.editors.groovy.session.GrapeSupport;
 import org.orbisgis.ui.editors.groovy.session.SessionClassLoader;
 import org.orbisgis.ui.editors.groovy.session.GroovySession;
@@ -45,6 +46,11 @@ public class GroovyActivator extends AbstractUIPlugin {
             DBeaverFacade facade = new DBeaverFacade(htmlPages);
             binding.setVariable(DBeaverFacade.VARIABLE, facade);
             return facade;
+        });
+        // 'vegalite(...)': Vega-Lite specifications, with their completion in the editor
+        GroovySession.addBindingContributor(binding -> {
+            binding.setVariable(VegaLiteFunction.NAME, new VegaLiteFunction());
+            return null;
         });
     }
 

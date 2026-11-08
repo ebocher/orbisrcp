@@ -23,6 +23,7 @@ import org.eclipse.jface.text.IAutoEditStrategy;
 import org.eclipse.ui.editors.text.EditorsUI;
 import org.eclipse.ui.texteditor.AbstractDecoratedTextEditorPreferenceConstants;
 import org.eclipse.jface.text.IDocument;
+import org.eclipse.jface.text.DefaultInformationControl;
 import org.eclipse.jface.text.IInformationControlCreator;
 import org.eclipse.jface.text.ITextViewer;
 import org.eclipse.jface.text.contentassist.ContentAssistant;
@@ -41,6 +42,7 @@ import org.jkiss.dbeaver.ui.UIStyles;
 import org.orbisgis.ui.editors.groovy.GroovyEditor;
 import org.orbisgis.ui.editors.groovy.completion.GroovyCompletionProcessor;
 import org.orbisgis.ui.editors.groovy.completion.GroovyTemplateProcessor;
+import org.orbisgis.ui.editors.groovy.completion.vegalite.VegaLiteCompletionProcessor;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -105,9 +107,13 @@ public class GroovySourceViewerConfiguration extends TextSourceViewerConfigurati
     public IContentAssistant getContentAssistant(final ISourceViewer sourceViewer) {
         ContentAssistant assistant = new ContentAssistant();
         assistant.setDocumentPartitioning(getConfiguredDocumentPartitioning(sourceViewer));
+        VegaLiteCompletionProcessor vegaLite = new VegaLiteCompletionProcessor();
         assistant.setContentAssistProcessor(new CompositeProcessor(
-                new GroovyTemplateProcessor(), new GroovyCompletionProcessor(editor::getSession)),
+                new GroovyTemplateProcessor(), new GroovyCompletionProcessor(editor::getSession), vegaLite),
                 IDocument.DEFAULT_CONTENT_TYPE);
+        // In the strings, only the values of the Vega-Lite specifications: vegalite(mark: "ba|")
+        assistant.setContentAssistProcessor(vegaLite, GroovyPartitions.STRING);
+        assistant.setContentAssistProcessor(vegaLite, GroovyPartitions.GSTRING);
         assistant.setInformationControlCreator(getInformationControlCreator(sourceViewer));
         assistant.enableAutoInsert(true);
         assistant.enableAutoActivation(true);
@@ -120,7 +126,8 @@ public class GroovySourceViewerConfiguration extends TextSourceViewerConfigurati
 
     @Override
     public IInformationControlCreator getInformationControlCreator(ISourceViewer sourceViewer) {
-        return null;
+        // Description of the selected proposal (Vega-Lite properties...)
+        return parent -> new DefaultInformationControl(parent, true);
     }
 
     @Override
@@ -147,14 +154,22 @@ public class GroovySourceViewerConfiguration extends TextSourceViewerConfigurati
     private static final class CompositeProcessor implements IContentAssistProcessor {
         private final GroovyTemplateProcessor templates;
         private final GroovyCompletionProcessor completion;
+        private final VegaLiteCompletionProcessor vegaLite;
 
-        CompositeProcessor(GroovyTemplateProcessor templates, GroovyCompletionProcessor completion) {
+        CompositeProcessor(GroovyTemplateProcessor templates, GroovyCompletionProcessor completion,
+                           VegaLiteCompletionProcessor vegaLite) {
             this.templates = templates;
             this.completion = completion;
+            this.vegaLite = vegaLite;
         }
 
         @Override
         public ICompletionProposal[] computeCompletionProposals(ITextViewer viewer, int offset) {
+            // In a Vega-Lite specification, only its proposals: they do not mix with the Groovy ones
+            ICompletionProposal[] specification = vegaLite.proposals(viewer, offset);
+            if (specification != null) {
+                return specification;
+            }
             List<ICompletionProposal> proposals = new ArrayList<>(templates.computeTemplateProposals(viewer, offset));
             proposals.addAll(Arrays.asList(completion.computeCompletionProposals(viewer, offset)));
             return proposals.toArray(new ICompletionProposal[0]);

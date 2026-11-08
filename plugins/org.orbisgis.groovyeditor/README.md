@@ -197,6 +197,37 @@ dbeaver.show([
 ], "Communes")
 ```
 
+#### Writing a specification: `vegalite(...)`
+
+Write the specification in `vegalite(...)`, as named arguments (or as a map: `vegalite([...])`). It returns the
+specification as a map:
+
+```groovy
+def spec = vegalite(
+    data: [values: rows],
+    mark: [type: "bar", tooltip: true],
+    encoding: [
+        x: [field: "name", type: "nominal"],
+        y: [field: "area", type: "quantitative"]
+    ]
+)
+dbeaver.show(spec, "Communes")
+```
+
+In the parentheses of `vegalite(...)`, the completion (`Ctrl+Space`) follows the
+[Vega-Lite schema](https://vega.github.io/vega-lite/docs/) (version 6.4.3, as demat), as the Vega editor:
+
+- at a key, the properties allowed at this place (`encoding: [x: [|` gives `field`, `type`, `aggregate`,
+  `axis`...), with their documentation, except the ones already written;
+- at a value with fixed choices, these choices: `type: |` gives `"quantitative"`, `"nominal"`...; also inside
+  the quotes (`mark: "ba|"`);
+- at a value written in Groovy (`values: rows`, `field: column`, a closure, a method call...), the Groovy
+  completion.
+
+The Vega-Lite and the Groovy proposals are never mixed, and out of `vegalite(...)` (a map given directly to
+`dbeaver.show`...) there is no Vega-Lite completion. The schema is loaded on the first use (about 3 MB in memory,
+shared by the consoles). The `vegalite` template writes a complete chart.
+
 Other pages:
 - `dbeaver.html(new File("/tmp/chart.html"))`: an HTML file, for instance written by demat with `toHTML`;
 - `dbeaver.html("<h1>Report</h1>...", "Report")`: HTML content;

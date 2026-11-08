@@ -633,6 +633,7 @@ public class DBeaverFacade implements AutoCloseable {
         help.add("  dbeaver.refresh(target)          refresh a connection or an object in the navigator");
         help.add("  dbeaver.openSql(datasource, sql) open a SQL console");
         help.add("  dbeaver.show(spec, title)        display a Vega-Lite chart (map or JSON, demat spec...)");
+        help.add("  vegalite(mark: ..., encoding: ...)  write a Vega-Lite spec, with completion (Ctrl+Space)");
         help.add("  dbeaver.html(html, title)        display HTML content");
         help.add("  dbeaver.html(new File(path))     display an HTML file (demat toHTML...)");
         help.add("  dbeaver.browse(url, title)       display a web page");

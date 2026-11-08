@@ -21,8 +21,6 @@ package org.orbisgis.ui.editors.groovy.syntax;
 import org.eclipse.jface.text.BadLocationException;
 import org.eclipse.jface.text.IDocument;
 import org.eclipse.jface.text.IRegion;
-import org.eclipse.jface.text.ITypedRegion;
-import org.eclipse.jface.text.TextUtilities;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
@@ -37,11 +35,10 @@ import java.util.Deque;
  */
 public final class GroovyFormatter {
 
-    private static final byte CODE = 0;
-    private static final byte COMMENT = 1;
-    private static final byte STRING = 2;
-    /** Flag of the first character of a comment or a string */
-    private static final byte STARTS = 4;
+    private static final byte CODE = CodeKinds.CODE;
+    private static final byte COMMENT = CodeKinds.COMMENT;
+    private static final byte STRING = CodeKinds.STRING;
+    private static final byte STARTS = CodeKinds.STARTS;
 
     /** An opening bracket */
     private record Opener(char bracket, int offset, int level, String indent) {
@@ -273,33 +270,8 @@ public final class GroovyFormatter {
         return kind == COMMENT ? text.stripTrailing() : text;
     }
 
-    /**
-     * Kind of each character of the document: code, comment or string.
-     */
     private static byte[] kinds(IDocument document) {
-        byte[] kinds = new byte[document.getLength() + 1];
-        try {
-            ITypedRegion[] regions = TextUtilities.computePartitioning(document, GroovyPartitions.PARTITIONING, 0,
-                    document.getLength(), false);
-            for (ITypedRegion region : regions) {
-                byte kind = switch (region.getType()) {
-                    case GroovyPartitions.COMMENT, GroovyPartitions.DOC_COMMENT -> COMMENT;
-                    case GroovyPartitions.STRING, GroovyPartitions.GSTRING -> STRING;
-                    default -> CODE;
-                };
-                if (kind == CODE) {
-                    continue;
-                }
-                int end = region.getOffset() + region.getLength();
-                for (int offset = region.getOffset(); offset < end; offset++) {
-                    kinds[offset] = kind;
-                }
-                kinds[region.getOffset()] |= STARTS;
-            }
-        } catch (BadLocationException e) {
-            // no partitioning: all code
-        }
-        return kinds;
+        return CodeKinds.of(document);
     }
 
     private static int firstNonBlank(String text) {

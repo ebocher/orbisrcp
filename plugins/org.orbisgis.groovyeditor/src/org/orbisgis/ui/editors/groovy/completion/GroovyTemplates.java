@@ -70,6 +70,8 @@ public final class GroovyTemplates {
                     "${sql}.eachRow(\"${query}\") { ${row} ->\n\t${cursor}\n}"),
             new Definition("eachRow", "loop over the rows of a query on a DBeaver connection",
                     "dbeaver.sql(\"${connection}\").eachRow(\"${query}\") { ${row} ->\n\t${cursor}\n}"),
+            new Definition("vegalite", "Vega-Lite chart of rows, shown in a view",
+                    "def ${spec} = vegalite(\n\tdata: [values: ${rows}],\n\tmark: [type: \"${bar}\", tooltip: true],\n\tencoding: [\n\t\tx: [field: \"${x}\", type: \"nominal\"],\n\t\ty: [field: \"${y}\", type: \"quantitative\"]\n\t]\n)\ndbeaver.show(${spec}, \"${title}\")${cursor}"),
             new Definition("while", "loop while a condition is true",
                     "while (${condition}) {\n\t${cursor}\n}"),
             new Definition("dowhile", "loop at least once, while a condition is true",
