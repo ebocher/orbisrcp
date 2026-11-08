@@ -5,13 +5,19 @@
 
     <extension point="org.jkiss.dbeaver.dataSourceProvider">
 
-        <!-- H2GIS driver -->
+        <!-- H2GIS driver following the development version (snapshots) of H2GIS. DBeaver has an official
+             H2GIS driver (plugin org.jkiss.dbeaver.ext.h2) following the releases.
+
+             The version must be an explicit x.y.z-SNAPSHOT: Maven Central does not have it, so DBeaver looks in
+             the snapshots repository and takes its last build. RELEASE, LATEST or a version pattern are always
+             resolved by Maven Central, with a release. Change it to the version of the H2GIS pom.xml when the
+             development of a new version starts. -->
         <datasource
                 class="org.orbisgis.h2gis.H2GISSnapshotDataSourceProvider"
                 description="%datasource.h2gis.description"
                 id="h2gis_snapshot"
                 parent="generic"
-                label="H2GIS"
+                label="H2GIS Snapshot"
                 icon="icons/h2gis_icon.png"
                 dialect="h2">
             <drivers managable="true">
@@ -26,12 +32,12 @@
                         sampleURL="jdbc:h2:{file}"
                         webURL="http://www.h2gis.org/"
                         embedded="true"
-                        description="H2GIS Embedded"
+                        description="H2GIS embedded, development version (2.2.6-SNAPSHOT)"
                         categories="spatial,sql,embedded">
 
-                    <file type="jar" path="maven:/org.orbisgis:h2gis:RELEASE"/>
-                    <file type="jar" path="maven:/org.orbisgis:h2gis-api:RELEASE"/>
-                    <file type="jar" path="maven:/org.orbisgis:h2gis-utilities:RELEASE"/>
+                    <file type="jar" path="maven:/org.orbisgis:h2gis:2.2.6-SNAPSHOT"/>
+                    <file type="jar" path="maven:/org.orbisgis:h2gis-api:2.2.6-SNAPSHOT"/>
+                    <file type="jar" path="maven:/org.orbisgis:h2gis-utilities:2.2.6-SNAPSHOT"/>
 
                     <parameter name="query-get-active-db" value="SELECT SCHEMA()"/>
                     <parameter name="query-set-active-db" value="SET SCHEMA = ?"/>
@@ -49,12 +55,12 @@
                         sampleURL="jdbc:h2:tcp://{host}[:{port}]/{database}"
                         defaultPort="9092"
                         webURL="http://www.h2gis.org/"
-                        description="H2GIS Embedded"
+                        description="H2GIS server, development version (2.2.6-SNAPSHOT)"
                         categories="spatial,sql,server">
 
-                    <file type="jar" path="maven:/org.orbisgis:h2gis:RELEASE"/>
-                    <file type="jar" path="maven:/org.orbisgis:h2gis-api:RELEASE"/>
-                    <file type="jar" path="maven:/org.orbisgis:h2gis-utilities:RELEASE"/>
+                    <file type="jar" path="maven:/org.orbisgis:h2gis:2.2.6-SNAPSHOT"/>
+                    <file type="jar" path="maven:/org.orbisgis:h2gis-api:2.2.6-SNAPSHOT"/>
+                    <file type="jar" path="maven:/org.orbisgis:h2gis-utilities:2.2.6-SNAPSHOT"/>
 
                     <parameter name="query-get-active-db" value="SELECT SCHEMA()"/>
                     <parameter name="query-set-active-db" value="SET SCHEMA = ?"/>
