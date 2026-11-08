@@ -40,12 +40,12 @@ import java.util.function.BiFunction;
  */
 public class GroovyTemplateProcessor extends TemplateCompletionProcessor {
 
-    private final BiFunction<String, Integer, Optional<Object>> receiver;
+    private final BiFunction<String, Integer, Optional<Class<?>>> receiver;
 
     /**
-     * @param receiver gives the value of the object before a point, if it is known
+     * @param receiver gives the class of the object before a point, if it is known
      */
-    public GroovyTemplateProcessor(BiFunction<String, Integer, Optional<Object>> receiver) {
+    public GroovyTemplateProcessor(BiFunction<String, Integer, Optional<Class<?>>> receiver) {
         this.receiver = receiver;
     }
 

@@ -18,6 +18,7 @@
  */
 package org.orbisgis.ui.editors.groovy.completion;
 
+import groovy.lang.GroovySystem;
 import groovy.lang.MetaClass;
 import groovy.lang.MetaMethod;
 import groovy.lang.MetaProperty;
@@ -107,9 +108,10 @@ public class GroovyCompletionProcessor implements IContentAssistProcessor {
 
         List<ComplProposal> proposals = new ArrayList<>();
         if (start > 0 && text.charAt(start - 1) == '.') {
-            String receiver = receiverBefore(text, start - 1);
-            if (!receiver.isEmpty() && context != null) {
-                addMemberProposals(proposals, context, receiver, prefix, start, replaceLength);
+            Optional<ReceiverTypes.Resolved> receiver = context == null ? Optional.empty()
+                    : resolveReceiver(context, text, start - 1);
+            if (receiver.isPresent()) {
+                addMemberProposals(proposals, receiver.get(), prefix, start, replaceLength);
             }
         } else {
             addContextProposals(proposals, context, text, prefix, start, replaceLength);
@@ -152,52 +154,73 @@ public class GroovyCompletionProcessor implements IContentAssistProcessor {
     /**
      * @param text   the script
      * @param offset a position after a point
-     * @return the value of the variable written before the point, if the context has it: empty if the object is
-     * unknown (not a variable, or not run yet)
+     * @return the class of the object written before the point, if it is known ({@code void} for the result of a
+     * method returning nothing, {@code Class} for a class name)
      */
-    public Optional<Object> receiverValue(String text, int offset) {
+    public Optional<Class<?>> receiverType(String text, int offset) {
         int start = offset;
         while (start > 0 && Character.isJavaIdentifierPart(text.charAt(start - 1))) {
             start--;
         }
-        if (start == 0 || text.charAt(start - 1) != '.') {
-            return Optional.empty();
-        }
-        String receiver = receiverBefore(text, start - 1);
         GroovySession context = session.get();
-        if (receiver.isEmpty() || receiver.contains(".") || context == null) {
+        if (start == 0 || text.charAt(start - 1) != '.' || context == null) {
             return Optional.empty();
         }
-        Map<String, Object> variables = context.getVariables();
-        if (!variables.containsKey(receiver) || variables.get(receiver) == null) {
+        return resolveReceiver(context, text, start - 1).map(receiver -> receiver.isStatic() ? Class.class
+                : receiver.value() != null ? receiver.value().getClass() : receiver.type());
+    }
+
+    private Optional<ReceiverTypes.Resolved> resolveReceiver(GroovySession context, String text, int dotOffset) {
+        try {
+            return ReceiverTypes.resolve(text, dotOffset, context.getVariables(), name -> resolveClass(context, name));
+        } catch (RuntimeException | LinkageError e) {
+            LOGGER.trace("Unable to resolve the object before the point", e);
             return Optional.empty();
         }
-        return Optional.of(variables.get(receiver));
     }
 
     // ---------------------------------------------------------------- receiver.member
 
-    private void addMemberProposals(List<ComplProposal> proposals, GroovySession context, String receiver,
-                                    String prefix, int start, int replaceLength) {
-        Map<String, Object> variables = context.getVariables();
-        if (!receiver.contains(".") && variables.containsKey(receiver)) {
-            Object value = variables.get(receiver);
-            if (value instanceof Class<?> clazz) {
-                addStaticMembers(proposals, clazz, prefix, start, replaceLength);
-            } else if (value != null) {
-                addInstanceMembers(proposals, value, prefix, start, replaceLength);
-            }
+    private void addMemberProposals(List<ComplProposal> proposals, ReceiverTypes.Resolved receiver, String prefix,
+                                    int start, int replaceLength) {
+        if (receiver.isVoid()) {
+            // the method returns nothing
             return;
         }
-        Class<?> clazz = resolveClass(context, receiver);
-        if (clazz != null) {
-            addStaticMembers(proposals, clazz, prefix, start, replaceLength);
+        if (receiver.isStatic()) {
+            addStaticMembers(proposals, receiver.type(), prefix, start, replaceLength);
+        } else if (receiver.value() != null) {
+            if (receiver.value() instanceof Map<?, ?> map) {
+                // the keys of a map are read as properties: spec.encoding
+                for (Object key : map.keySet()) {
+                    String name = String.valueOf(key);
+                    if (key instanceof String && isIdentifier(name) && matches(name, prefix)) {
+                        Object value = map.get(key);
+                        proposals.add(new ComplProposal(start, replaceLength, name, name.length(), name,
+                                ": " + (value == null ? "null" : simpleName(value.getClass())),
+                                ComplProposal.Kind.PROPERTY, prefix.length()));
+                    }
+                }
+            }
+            addInstanceMembers(proposals, InvokerHelper.getMetaClass(receiver.value()),
+                    Receivers.isIterable(receiver.value()), null, prefix, start, replaceLength);
+        } else {
+            addInstanceMembers(proposals, GroovySystem.getMetaClassRegistry().getMetaClass(receiver.type()),
+                    Receivers.isIterable(receiver.type()), receiver.type(), prefix, start, replaceLength);
         }
     }
 
-    private void addInstanceMembers(List<ComplProposal> proposals, Object value, String prefix, int start,
-                                    int replaceLength) {
-        MetaClass metaClass = InvokerHelper.getMetaClass(value);
+    private static boolean isIdentifier(String name) {
+        return !name.isEmpty() && Character.isJavaIdentifierStart(name.charAt(0))
+                && name.chars().allMatch(Character::isJavaIdentifierPart);
+    }
+
+    /**
+     * @param type the class of the object when only its class is known: its methods are also read by reflection,
+     *             since the meta class of an interface (List, Connection...) has not its methods
+     */
+    private void addInstanceMembers(List<ComplProposal> proposals, MetaClass metaClass, boolean iterable,
+                                    Class<?> type, String prefix, int start, int replaceLength) {
         Set<String> seen = new TreeSet<>();
         for (MetaProperty property : metaClass.getProperties()) {
             String name = property.getName();
@@ -208,7 +231,6 @@ public class GroovyCompletionProcessor implements IContentAssistProcessor {
         }
         List<MetaMethod> methods = new ArrayList<>(metaClass.getMethods());
         methods.addAll(metaClass.getMetaMethods());
-        boolean iterable = Receivers.isIterable(value);
         for (MetaMethod method : methods) {
             if (!method.isPublic() || method.getName().contains("$") || method.getName().startsWith("<")) {
                 continue;
@@ -220,6 +242,14 @@ public class GroovyCompletionProcessor implements IContentAssistProcessor {
             }
             addMethod(proposals, seen, method.getName(), method.getNativeParameterTypes(), method.getReturnType(),
                     prefix, start, replaceLength);
+        }
+        if (type != null) {
+            for (Method method : type.getMethods()) {
+                if (!Modifier.isStatic(method.getModifiers())) {
+                    addMethod(proposals, seen, method.getName(), method.getParameterTypes(), method.getReturnType(),
+                            prefix, start, replaceLength);
+                }
+            }
         }
     }
 
@@ -318,7 +348,7 @@ public class GroovyCompletionProcessor implements IContentAssistProcessor {
      * Resolve a class name written in the script: fully qualified name, imported class, class of a package
      * imported in the context or by default.
      */
-    private static Class<?> resolveClass(GroovySession context, String name) {
+    static Class<?> resolveClass(GroovySession context, String name) {
         List<String> candidates = new ArrayList<>();
         if (name.contains(".")) {
             candidates.add(name);

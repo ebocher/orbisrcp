@@ -110,7 +110,7 @@ public class GroovySourceViewerConfiguration extends TextSourceViewerConfigurati
         VegaLiteCompletionProcessor vegaLite = new VegaLiteCompletionProcessor();
         GroovyCompletionProcessor groovy = new GroovyCompletionProcessor(editor::getSession);
         assistant.setContentAssistProcessor(new CompositeProcessor(
-                new GroovyTemplateProcessor(groovy::receiverValue), groovy, vegaLite),
+                new GroovyTemplateProcessor(groovy::receiverType), groovy, vegaLite),
                 IDocument.DEFAULT_CONTENT_TYPE);
         // In the strings, only the values of the Vega-Lite specifications: vegalite(mark: "ba|")
         assistant.setContentAssistProcessor(vegaLite, GroovyPartitions.STRING);

@@ -47,26 +47,35 @@ final class Receivers {
      * @return true if the object can be iterated (collection, map, array, iterator...)
      */
     static boolean isIterable(Object value) {
-        return value instanceof Iterable || value instanceof Map || value instanceof Iterator
-                || value instanceof Enumeration || (value != null && value.getClass().isArray());
+        return value != null && isIterable(value.getClass());
+    }
+
+    /**
+     * @return true if the objects of a class can be iterated (collection, map, array, iterator...)
+     */
+    static boolean isIterable(Class<?> type) {
+        return Iterable.class.isAssignableFrom(type) || Map.class.isAssignableFrom(type)
+                || Iterator.class.isAssignableFrom(type) || Enumeration.class.isAssignableFrom(type)
+                || type.isArray();
     }
 
     /**
      * @param placeholder the name of the object in a template applying to an object ({@code ${collection}.each})
+     * @param type        the class of the object
      * @return true if the template applies to the object
      */
-    static boolean acceptsTemplate(String placeholder, Object value) {
+    static boolean acceptsTemplate(String placeholder, Class<?> type) {
         return switch (placeholder) {
-            case "collection" -> isIterable(value);
-            case "map" -> value instanceof Map;
-            case "n", "from" -> value instanceof Number;
-            case "sql" -> isSql(value);
+            case "collection" -> isIterable(type);
+            case "map" -> Map.class.isAssignableFrom(type);
+            case "n", "from" -> Number.class.isAssignableFrom(type) || type == int.class || type == long.class;
+            case "sql" -> isSql(type);
             default -> true;
         };
     }
 
-    private static boolean isSql(Object value) {
-        for (Class<?> c = value == null ? null : value.getClass(); c != null; c = c.getSuperclass()) {
+    private static boolean isSql(Class<?> type) {
+        for (Class<?> c = type; c != null; c = c.getSuperclass()) {
             if (c.getName().equals("groovy.sql.Sql")) {
                 return true;
             }

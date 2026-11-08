@@ -104,11 +104,11 @@ public final class GroovyTemplates {
     /**
      * @param text     the script
      * @param offset   the position of the cursor
-     * @param receiver gives the value of the object before the point, if it is known
+     * @param receiver gives the class of the object before the point, if it is known
      * @return the templates to propose at this position; after a point, the templates applying to an object
      * of another kind are not proposed ({@code dbeaver.} does not give {@code each})
      */
-    public static List<Match> match(String text, int offset, Function<Integer, Optional<Object>> receiver) {
+    public static List<Match> match(String text, int offset, Function<Integer, Optional<Class<?>>> receiver) {
         int start = offset;
         while (start > 0 && Character.isJavaIdentifierPart(text.charAt(start - 1))) {
             start--;
@@ -135,8 +135,8 @@ public final class GroovyTemplates {
                 if (!matcher.matches()) {
                     continue;
                 }
-                Optional<Object> value = receiver.apply(offset);
-                if (value.isPresent() && !Receivers.acceptsTemplate(matcher.group(1), value.get())) {
+                Optional<Class<?>> type = receiver.apply(offset);
+                if (type.isPresent() && !Receivers.acceptsTemplate(matcher.group(1), type.get())) {
                     continue;
                 }
                 // The object is already written: insert the method call only
