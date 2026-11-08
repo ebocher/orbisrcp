@@ -59,6 +59,17 @@ Once DBeaver has restarted, select the main menu `Groovy Editor`, click on `Open
 Shortcuts: `Ctrl+Enter` executes the whole script, `Ctrl+Shift+Enter` executes the selection (or the current line if
 nothing is selected), `Ctrl+Space` opens the completion (it also opens after a `.`).
 
+### Indentation and formatting
+
+- Enter indents the new line after `{`, `[` or `(`; a closing bracket typed at the start of a line is aligned on
+  the line of its opening bracket.
+- **Format** (`Ctrl+Shift+F`, or right click > Format) indents the selected lines, or the whole script: depth of the
+  brackets (one level per line, so `show([` ... `], "Title")` is indented once), method chains starting with a
+  point, trailing spaces and repeated blank lines. Only the blanks change; the strings (SQL in `"""..."""`) and
+  the comments are kept.
+- The indentation (tab width, spaces or tabs) is the one of the text editors: *Window > Preferences > Editors >
+  Text Editors* ("Displayed tab width", "Insert spaces for tabs").
+
 ### Templates
 
 Type the beginning of a template name and press `Ctrl+Space`: the template is inserted, `Tab` moves to the next

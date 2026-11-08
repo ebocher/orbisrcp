@@ -19,7 +19,9 @@
 package org.orbisgis.ui.editors.groovy;
 
 import org.eclipse.core.runtime.NullProgressMonitor;
+import org.eclipse.jface.action.Action;
 import org.eclipse.jface.action.IAction;
+import org.eclipse.jface.action.IMenuManager;
 import org.eclipse.jface.resource.ImageDescriptor;
 import org.eclipse.jface.text.BadLocationException;
 import org.eclipse.jface.text.IDocument;
@@ -42,6 +44,7 @@ import org.eclipse.ui.editors.text.ForwardingDocumentProvider;
 import org.eclipse.ui.editors.text.TextFileDocumentProvider;
 import org.eclipse.ui.texteditor.AbstractDecoratedTextEditor;
 import org.eclipse.ui.texteditor.IDocumentProvider;
+import org.eclipse.ui.texteditor.ITextEditorActionConstants;
 import org.eclipse.ui.texteditor.ITextEditorActionDefinitionIds;
 import org.eclipse.ui.texteditor.TextOperationAction;
 import org.jkiss.dbeaver.ui.UIUtils;
@@ -52,6 +55,7 @@ import org.orbisgis.ui.editors.groovy.GroovyOutputConsole.GroovyConsoleContent;
 import org.orbisgis.ui.editors.groovy.GroovyOutputConsole.Style;
 import org.orbisgis.ui.editors.groovy.session.GroovySession;
 import org.orbisgis.ui.editors.groovy.session.ScriptErrors.ScriptError;
+import org.orbisgis.ui.editors.groovy.syntax.GroovyFormatter;
 import org.orbisgis.ui.editors.groovy.syntax.GroovyPartitions;
 import org.orbisgis.ui.editors.groovy.syntax.GroovySourceViewerConfiguration;
 
@@ -71,6 +75,11 @@ public class GroovyEditor extends AbstractDecoratedTextEditor implements ISaveab
     private static final int SIDE_TOOLBAR_VERTICAL_SPACING = 3;
 
     private static final String CONTENT_ASSIST_ACTION = "ContentAssistProposal";
+
+    private static final String FORMAT_ACTION = "GroovyFormat";
+
+    /** Command of the formatting (Ctrl+Shift+F) */
+    public static final String FORMAT_COMMAND = "org.orbisgis.ui.editors.groovy.format";
 
     /** Standard error annotation: red underline, marker in the ruler and the overview ruler */
     private static final String ERROR_ANNOTATION_TYPE = "org.eclipse.ui.workbench.texteditor.error";
@@ -279,6 +288,75 @@ public class GroovyEditor extends AbstractDecoratedTextEditor implements ISaveab
         action.setActionDefinitionId(ITextEditorActionDefinitionIds.CONTENT_ASSIST_PROPOSALS);
         setAction(CONTENT_ASSIST_ACTION, action);
         markAsStateDependentAction(CONTENT_ASSIST_ACTION, true);
+
+        IAction format = new Action("Format") {
+            @Override
+            public void run() {
+                format();
+            }
+        };
+        format.setToolTipText("Indent the selected lines, or the whole script");
+        format.setActionDefinitionId(FORMAT_COMMAND);
+        setAction(FORMAT_ACTION, format);
+        markAsStateDependentAction(FORMAT_ACTION, true);
+    }
+
+    @Override
+    protected void editorContextMenuAboutToShow(IMenuManager menu) {
+        super.editorContextMenuAboutToShow(menu);
+        addAction(menu, ITextEditorActionConstants.GROUP_EDIT, FORMAT_ACTION);
+    }
+
+    /**
+     * Indent the selected lines, or the whole script when nothing is selected. Only the blanks change.
+     */
+    public void format() {
+        ISourceViewer viewer = getSourceViewer();
+        if (viewer == null || !isEditable()) {
+            return;
+        }
+        IDocument document = viewer.getDocument();
+        ITextSelection selection = (ITextSelection) getSelectionProvider().getSelection();
+        try {
+            int firstLine = 0;
+            int lastLine = document.getNumberOfLines() - 1;
+            if (selection.getLength() > 0) {
+                firstLine = selection.getStartLine();
+                lastLine = selection.getEndLine();
+                // A selection ending at the start of a line does not include this line
+                if (lastLine > firstLine && document.getLineOffset(lastLine) == selection.getOffset() + selection.getLength()) {
+                    lastLine--;
+                }
+            }
+            GroovyFormatter.Result result = ((GroovySourceViewerConfiguration) getSourceViewerConfiguration())
+                    .createFormatter().format(document, firstLine, lastLine);
+            int start = document.getLineOffset(firstLine);
+            int end = document.getLineOffset(lastLine) + document.getLineLength(lastLine);
+            if (result.text().equals(document.get(start, end - start))) {
+                return;
+            }
+            // The caret stays on its line, at the same place in the text of the line
+            int caretLine = document.getLineOfOffset(selection.getOffset());
+            IRegion caretRegion = document.getLineInformation(caretLine);
+            String caretLineText = document.get(caretRegion.getOffset(), caretRegion.getLength());
+            int indent = caretLineText.length() - caretLineText.stripLeading().length();
+            int inText = Math.max(0, selection.getOffset() - caretRegion.getOffset() - indent);
+
+            document.replace(start, end - start, result.text());
+
+            if (selection.getLength() > 0) {
+                int newEnd = start + result.text().length();
+                selectAndReveal(start, newEnd - start);
+            } else if (caretLine >= firstLine && caretLine <= lastLine) {
+                int newLine = firstLine + result.lineMap()[caretLine - firstLine];
+                IRegion region = document.getLineInformation(Math.min(newLine, document.getNumberOfLines() - 1));
+                String text = document.get(region.getOffset(), region.getLength());
+                int newIndent = text.length() - text.stripLeading().length();
+                selectAndReveal(region.getOffset() + Math.min(newIndent + inText, text.length()), 0);
+            }
+        } catch (BadLocationException e) {
+            LOGGER.error("Unable to format the script.", e);
+        }
     }
 
     @Override

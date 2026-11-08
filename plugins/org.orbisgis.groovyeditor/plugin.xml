@@ -69,6 +69,11 @@
               description="Libraries of the console: @Grab libraries, added jars and folders"
               id="org.orbisgis.ui.editors.groovy.listClasspaths"
               name="Classpath"> </command>
+      <command
+              categoryId="org.orbisgis.ui.editors.groovy"
+              description="Indent the selected lines, or the whole script"
+              id="org.orbisgis.ui.editors.groovy.format"
+              name="Format"> </command>
 
    </extension>
 
@@ -175,6 +180,12 @@
               contextId="org.orbisgis.ui.editors.groovy"
               schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
               sequence="CTRL+W">
+      </key>
+      <key
+              commandId="org.orbisgis.ui.editors.groovy.format"
+              contextId="org.orbisgis.ui.editors.groovy"
+              schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
+              sequence="M1+M2+F">
       </key>
    </extension>
    <extension

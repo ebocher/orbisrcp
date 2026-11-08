@@ -18,6 +18,10 @@
  */
 package org.orbisgis.ui.editors.groovy.syntax;
 
+import org.eclipse.jface.preference.IPreferenceStore;
+import org.eclipse.jface.text.IAutoEditStrategy;
+import org.eclipse.ui.editors.text.EditorsUI;
+import org.eclipse.ui.texteditor.AbstractDecoratedTextEditorPreferenceConstants;
 import org.eclipse.jface.text.IDocument;
 import org.eclipse.jface.text.IInformationControlCreator;
 import org.eclipse.jface.text.ITextViewer;
@@ -51,6 +55,8 @@ public class GroovySourceViewerConfiguration extends TextSourceViewerConfigurati
     private final GroovyColors colors;
 
     public GroovySourceViewerConfiguration(GroovyEditor editor) {
+        // Tab width and spaces for tabs of the text editors (Preferences > Editors > Text Editors)
+        super(EditorsUI.getPreferenceStore());
         this.editor = editor;
         this.colors = GroovyColors.of(isDarkTheme());
     }
@@ -61,6 +67,21 @@ public class GroovySourceViewerConfiguration extends TextSourceViewerConfigurati
         } catch (RuntimeException | LinkageError e) {
             return false;
         }
+    }
+
+    /**
+     * @return a formatter with the indentation of the text editor preferences
+     */
+    public GroovyFormatter createFormatter() {
+        IPreferenceStore store = fPreferenceStore != null ? fPreferenceStore : EditorsUI.getPreferenceStore();
+        return new GroovyFormatter(GroovyFormatter.indentUnit(
+                store.getInt(AbstractDecoratedTextEditorPreferenceConstants.EDITOR_TAB_WIDTH),
+                store.getBoolean(AbstractDecoratedTextEditorPreferenceConstants.EDITOR_SPACES_FOR_TABS)));
+    }
+
+    @Override
+    public IAutoEditStrategy[] getAutoEditStrategies(ISourceViewer sourceViewer, String contentType) {
+        return new IAutoEditStrategy[]{new GroovyAutoIndentStrategy(this::createFormatter)};
     }
 
     @Override
