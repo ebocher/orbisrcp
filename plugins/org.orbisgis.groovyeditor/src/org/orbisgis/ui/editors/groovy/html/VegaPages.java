@@ -167,7 +167,9 @@ public final class VegaPages {
                 .append("const spec = ").append(specJson.replace("</", "<\\/")).append(";\n")
                 .append("const options = { renderer: 'svg', downloadFileName: ")
                 .append(JsonOutput.toJson(fileName(title)))
-                .append(", actions: { export: true, source: true, compiled: true, editor: false }")
+                .append(", scaleFactor: { png: 2 }")
+                // View Source and View Compiled open new windows, which the embedded browser does not support
+                .append(", actions: { export: true, source: false, compiled: false, editor: false }")
                 .append(dark ? ", theme: 'dark'" : "").append(" };\n")
                 .append("vegaEmbed('#vis', spec, options).catch(function (error) {\n")
                 .append("  const message = document.createElement('div');\n")
@@ -175,6 +177,7 @@ public final class VegaPages {
                 .append("  message.textContent = 'Invalid specification: ' + error.message;\n")
                 .append("  document.getElementById('vis').replaceChildren(message);\n")
                 .append("});\n")
+                .append(DownloadBridge.SCRIPT)
                 .append("</script>\n</body>\n</html>\n");
         return html.toString();
     }

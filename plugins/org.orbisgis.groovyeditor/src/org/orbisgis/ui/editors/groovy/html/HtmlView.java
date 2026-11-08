@@ -20,9 +20,14 @@ package org.orbisgis.ui.editors.groovy.html;
 
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.SWTError;
+import org.eclipse.jface.dialogs.MessageDialog;
 import org.eclipse.swt.browser.Browser;
+import org.eclipse.swt.browser.BrowserFunction;
+import org.eclipse.swt.browser.ProgressAdapter;
+import org.eclipse.swt.browser.ProgressEvent;
 import org.eclipse.swt.layout.FillLayout;
 import org.eclipse.swt.widgets.Composite;
+import org.eclipse.swt.widgets.FileDialog;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.ui.IViewReference;
 import org.eclipse.ui.IWorkbenchPage;
@@ -31,6 +36,8 @@ import org.eclipse.ui.part.ViewPart;
 import org.orbisgis.core.logger.Logger;
 
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Base64;
 
 /**
@@ -53,6 +60,7 @@ public class HtmlView extends ViewPart {
         try {
             // The browser engine is the one chosen in the DBeaver preferences (Edge or Internet Explorer on Windows)
             browser = new Browser(parent, SWT.NONE);
+            installDownloads(browser);
         } catch (SWTError e) {
             LOGGER.error("Unable to create the web browser.", e);
             message = new Label(parent, SWT.WRAP);
@@ -65,6 +73,53 @@ public class HtmlView extends ViewPart {
         }
         if (pendingUrl != null) {
             show(pendingUrl);
+        }
+    }
+
+    /**
+     * The embedded browser cannot download files: the download links of the pages (Save as PNG of the charts,
+     * also in the pages written by demat) go through {@link DownloadBridge} to a Save As dialog.
+     */
+    private void installDownloads(Browser browser) {
+        new BrowserFunction(browser, DownloadBridge.FUNCTION) {
+            @Override
+            public Object function(Object[] arguments) {
+                if (arguments.length >= 2 && arguments[0] instanceof String name && arguments[1] instanceof String url) {
+                    // Not in the JavaScript call: a modal dialog opened there can block the browser engine
+                    browser.getDisplay().asyncExec(() -> {
+                        if (!browser.isDisposed()) {
+                            save(name, url);
+                        }
+                    });
+                }
+                return null;
+            }
+        };
+        browser.addProgressListener(new ProgressAdapter() {
+            @Override
+            public void completed(ProgressEvent event) {
+                browser.execute(DownloadBridge.SCRIPT);
+            }
+        });
+    }
+
+    private void save(String name, String dataUrl) {
+        FileDialog dialog = new FileDialog(getSite().getShell(), SWT.SAVE);
+        dialog.setFileName(name);
+        String extension = DownloadBridge.extension(name);
+        if (!extension.isEmpty()) {
+            dialog.setFilterExtensions(new String[]{"*." + extension, "*"});
+        }
+        dialog.setOverwrite(true);
+        String path = dialog.open();
+        if (path == null) {
+            return;
+        }
+        try {
+            Files.write(Path.of(path), DownloadBridge.decode(dataUrl));
+        } catch (Exception e) {
+            LOGGER.error("Unable to save " + path, e);
+            MessageDialog.openError(getSite().getShell(), "Save", "Unable to save " + path + ": " + e.getMessage());
         }
     }
 

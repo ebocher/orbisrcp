@@ -191,6 +191,9 @@ Other pages:
 - `dbeaver.html("<h1>Report</h1>...", "Report")`: HTML content;
 - `dbeaver.browse("https://...", "Title")`: a web page.
 
+The `...` menu of a chart saves it as PNG or SVG: DBeaver asks where to write the file. The download links of the
+other pages (demat pages...) open the same dialog.
+
 On Windows, the pages need the Edge browser engine (the default of DBeaver on Windows 10 and 11).
 
 ### Libraries with @Grab
@@ -216,7 +219,10 @@ h2gis.getSpatialTable("pts").each { println it.the_geom.buffer(10).area }
   (`-SNAPSHOT` versions). Add another one with `@GrabResolver(name='my-repo', root='https://...')`, or use your own
   Ivy configuration in `~/.groovy/grapeConfig.xml`.
 - The proxy settings of DBeaver (`Preferences` > `Network Connections`) are used.
-- A cached `-SNAPSHOT` version is not updated automatically: delete its folder in `~/.groovy/grapes` to get a newer one.
+- Local builds: after `mvn install` of a library, grab its `-SNAPSHOT` version. When the jar of `~/.m2` is newer than
+  the one cached by Grape, the new build is used (reset the context first if the library is already loaded).
+  A `-SNAPSHOT` downloaded from a remote repository is not updated automatically: delete its folder in
+  `~/.groovy/grapes` to get a newer one.
 - When a script fails, the line of the error is underlined in red in the editor (from its column for a syntax
   error), with a marker in the margin; hover it to read the error. The marks are removed at the next execution.
 - The **Classpath** button lists the libraries of the console: the `@Grab` libraries with their dependencies,

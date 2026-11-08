@@ -196,6 +196,7 @@ public final class GrapeSupport {
             if (report) {
                 listenDownloads();
                 GroovyConsoleContent.appendLine("@Grab " + describe(dependencies) + "...", Style.INFO);
+                refreshLocalSnapshots(dependencies);
             }
             Object result;
             reportingDownloads = report;
@@ -296,6 +297,52 @@ public final class GrapeSupport {
                     abstractResolver.setEventManager(ivy.getEventManager());
                 }
             }
+        }
+
+        /**
+         * A -SNAPSHOT version installed in the local Maven repository ({@code mvn install}) is copied once in the
+         * Grape cache, which is searched first: a newer build would never be seen. When the jar of the local
+         * repository is newer than the cached one, the cache entry is removed, so the grab copies the new build.
+         */
+        private void refreshLocalSnapshots(Map[] dependencies) {
+            if (!(delegate instanceof GrapeIvy grapeIvy)) {
+                return;
+            }
+            File localRepository = new File(System.getProperty("maven.repo.local",
+                    new File(System.getProperty("user.home"), ".m2/repository").getPath()));
+            for (Map dependency : dependencies) {
+                String group = value(dependency, "group", "groupId");
+                String module = value(dependency, "module", "artifactId");
+                String version = value(dependency, "version", "revision");
+                if (group == null || module == null || version == null || !version.endsWith("-SNAPSHOT")) {
+                    continue;
+                }
+                File localJar = new File(localRepository, group.replace('.', '/') + "/" + module + "/" + version
+                        + "/" + module + "-" + version + ".jar");
+                File cacheDir = new File(new File(grapeIvy.getGrapeCacheDir(), group), module);
+                File cachedJar = null;
+                for (String type : List.of("jars", "bundles")) {
+                    File candidate = new File(new File(cacheDir, type), module + "-" + version + ".jar");
+                    if (candidate.isFile()) {
+                        cachedJar = candidate;
+                    }
+                }
+                if (!localJar.isFile() || cachedJar == null || localJar.lastModified() <= cachedJar.lastModified()) {
+                    continue;
+                }
+                for (String name : List.of("ivy-" + version + ".xml", "ivy-" + version + ".xml.original",
+                        "ivydata-" + version + ".properties")) {
+                    new File(cacheDir, name).delete();
+                }
+                cachedJar.delete();
+                GroovyConsoleContent.appendLine("  newer local build of " + group + ":" + module + ":" + version
+                        + " found in " + localRepository + ", using it", Style.INFO);
+            }
+        }
+
+        private static String value(Map dependency, String key, String alternativeKey) {
+            Object value = dependency.containsKey(key) ? dependency.get(key) : dependency.get(alternativeKey);
+            return value == null ? null : value.toString();
         }
 
         /**
