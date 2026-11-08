@@ -158,6 +158,41 @@ dbeaver.inUI { /* code using the UI (views, dialogs...) */ }
 - `dbeaver.inUI { }` runs code in the UI thread, needed by the UI parts of the Eclipse and DBeaver API. Keep it
   short: DBeaver is frozen while it runs.
 
+### Charts and HTML pages
+
+`dbeaver.show(spec, title)` displays a [Vega-Lite](https://vega.github.io/vega-lite/) chart in a view of DBeaver.
+The specification is a Groovy map (or a JSON string), written in the script or built with
+[demat](https://github.com/orbisgis/demat): the same Vega 6.2 and Vega-Lite 6.4 libraries are embedded, so the
+charts look the same, offline. Showing a chart with the same title again replaces it.
+
+```groovy
+dbeaver.show([
+    data    : [values: dbeaver.query("geoclimate_db", "select nom, altitude from stations")],
+    mark    : "bar",
+    encoding: [x: [field: "nom", type: "nominal"], y: [field: "altitude", type: "quantitative"]]
+], "Stations")
+```
+
+Maps: the rows with a JTS geometry (from `dbeaver.query()`) become GeoJSON features, drawn with the `geoshape`
+mark; the other columns keep their name for the encodings. Lines need `mark: [type: "geoshape", filled: false]`.
+The default projection expects longitudes and latitudes (EPSG:4326): for projected coordinates, add
+`projection: [type: "identity", reflectY: true]`.
+
+```groovy
+dbeaver.show([
+    data    : [values: dbeaver.query("geoclimate_db", "select nom, the_geom from communes")],
+    mark    : "geoshape",
+    encoding: [color: [field: "nom", type: "nominal"]]
+], "Communes")
+```
+
+Other pages:
+- `dbeaver.html(new File("/tmp/chart.html"))`: an HTML file, for instance written by demat with `toHTML`;
+- `dbeaver.html("<h1>Report</h1>...", "Report")`: HTML content;
+- `dbeaver.browse("https://...", "Title")`: a web page.
+
+On Windows, the pages need the Edge browser engine (the default of DBeaver on Windows 10 and 11).
+
 ### Libraries with @Grab
 
 Libraries published on Maven can be loaded with `@Grab`, for example [orbisdata](https://github.com/orbisgis/orbisdata):

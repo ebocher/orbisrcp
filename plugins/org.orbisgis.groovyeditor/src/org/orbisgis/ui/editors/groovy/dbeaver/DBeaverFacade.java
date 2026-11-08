@@ -40,6 +40,7 @@ import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 import org.jkiss.dbeaver.model.runtime.VoidProgressMonitor;
 import org.jkiss.dbeaver.model.struct.DBSObject;
 import org.jkiss.dbeaver.runtime.DBWorkbench;
+import org.jkiss.dbeaver.ui.UIStyles;
 import org.jkiss.dbeaver.ui.editors.sql.SQLEditor;
 import org.jkiss.dbeaver.ui.editors.sql.handlers.SQLEditorHandlerOpenEditor;
 import org.jkiss.dbeaver.ui.editors.sql.handlers.SQLNavigatorContext;
@@ -48,7 +49,11 @@ import org.jkiss.dbeaver.ui.navigator.database.DatabaseNavigatorView;
 import org.orbisgis.core.logger.Logger;
 import org.orbisgis.ui.editors.groovy.GroovyOutputConsole.GroovyConsoleContent;
 import org.orbisgis.ui.editors.groovy.GroovyOutputConsole.Style;
+import org.orbisgis.ui.editors.groovy.html.HtmlPages;
+import org.orbisgis.ui.editors.groovy.html.HtmlView;
+import org.orbisgis.ui.editors.groovy.html.VegaPages;
 
+import java.io.File;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -79,6 +84,23 @@ public class DBeaverFacade implements AutoCloseable {
     private static final String CONTEXT_PURPOSE = "Groovy console";
 
     private final List<DBCExecutionContext> openedContexts = Collections.synchronizedList(new ArrayList<>());
+
+    /** Files of the HTML views, null when the views are not available */
+    private final HtmlPages pages;
+
+    /**
+     * @param pages files of the HTML views
+     */
+    public DBeaverFacade(HtmlPages pages) {
+        this.pages = pages;
+    }
+
+    /**
+     * Without HTML views.
+     */
+    public DBeaverFacade() {
+        this(null);
+    }
 
     // ---------------------------------------------------------------- platform
 
@@ -433,6 +455,106 @@ public class DBeaverFacade implements AutoCloseable {
         return openSql(datasource, "");
     }
 
+    // ---------------------------------------------------------------- HTML views
+
+    /**
+     * Display a Vega-Lite (or Vega) chart in a view of DBeaver. Showing a chart with the same title again
+     * replaces it.
+     *
+     * The data rows can come from {@code dbeaver.query(...)}: the JTS geometries are converted to GeoJSON features
+     * (for the geoshape marks), the columns stay readable with their name.
+     *
+     * @param spec  the specification: a map (written in the script or built with demat) or a JSON string
+     * @param title title of the view
+     */
+    public void show(Object spec, String title) throws Exception {
+        String json = VegaPages.toJson(spec);
+        HtmlPages htmlPages = requirePages();
+        String libraries = htmlPages.deployVegaLibraries();
+        boolean dark = inUI(DBeaverFacade::isDarkTheme);
+        File page = htmlPages.write(title, VegaPages.page(json, title, libraries, dark));
+        openView(title, page.toPath().toUri().toString());
+    }
+
+    /**
+     * Display a Vega-Lite chart in the "Chart" view.
+     */
+    public void show(Object spec) throws Exception {
+        show(spec, "Chart");
+    }
+
+    /**
+     * Display HTML content in a view of DBeaver.
+     *
+     * @param html  the content of the page
+     * @param title title of the view
+     */
+    public void html(String html, String title) throws Exception {
+        File page = requirePages().write(title, html);
+        openView(title, page.toPath().toUri().toString());
+    }
+
+    /**
+     * Display HTML content in the "HTML" view.
+     */
+    public void html(String html) throws Exception {
+        html(html, "HTML");
+    }
+
+    /**
+     * Display an HTML file (a page written by demat with toHTML...) in a view of DBeaver. The files next to it
+     * (scripts, images, data) are found.
+     *
+     * @param file  the HTML file
+     * @param title title of the view
+     */
+    public void html(File file, String title) throws Exception {
+        if (!file.isFile()) {
+            throw new IllegalArgumentException("No such file: " + file);
+        }
+        openView(title, file.toPath().toAbsolutePath().toUri().toString());
+    }
+
+    /**
+     * Display an HTML file in a view named after the file.
+     */
+    public void html(File file) throws Exception {
+        html(file, file.getName());
+    }
+
+    /**
+     * Display a web page (http, https or file URL) in a view of DBeaver.
+     */
+    public void browse(String url, String title) throws Exception {
+        openView(title, url);
+    }
+
+    private HtmlPages requirePages() {
+        if (pages == null) {
+            throw new IllegalStateException("The HTML views are not available.");
+        }
+        return pages;
+    }
+
+    private void openView(String title, String url) throws Exception {
+        inUI(() -> {
+            IWorkbenchWindow window = getWindow();
+            if (window == null || window.getActivePage() == null) {
+                throw new IllegalStateException("No DBeaver window to display the page.");
+            }
+            HtmlView.open(window.getActivePage(), title).show(url);
+            return null;
+        });
+    }
+
+    private static boolean isDarkTheme() {
+        try {
+            return UIStyles.isDarkTheme();
+        } catch (RuntimeException | LinkageError e) {
+            return false;
+        }
+    }
+
     // ---------------------------------------------------------------- UI thread
 
     /**
@@ -510,6 +632,10 @@ public class DBeaverFacade implements AutoCloseable {
         help.add("  dbeaver.selectedNodes            selected navigator nodes");
         help.add("  dbeaver.refresh(target)          refresh a connection or an object in the navigator");
         help.add("  dbeaver.openSql(datasource, sql) open a SQL console");
+        help.add("  dbeaver.show(spec, title)        display a Vega-Lite chart (map or JSON, demat spec...)");
+        help.add("  dbeaver.html(html, title)        display HTML content");
+        help.add("  dbeaver.html(new File(path))     display an HTML file (demat toHTML...)");
+        help.add("  dbeaver.browse(url, title)       display a web page");
         help.add("  dbeaver.inUI { ... }             run code in the UI thread");
         help.add("  dbeaver.platform / project / projects / monitor   raw DBeaver API");
         GroovyConsoleContent.append(help.toString(), Style.OUTPUT);
