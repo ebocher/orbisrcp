@@ -146,7 +146,7 @@ public class ClasspathDialog extends Dialog {
     }
 
     private void refresh() {
-        entries = ClasspathEntries.list(session.getClassLoader().getURLs(), ClassPathHandler.getUrls());
+        entries = ClasspathEntries.list(session.getClasspathURLs(), ClassPathHandler.getUrls());
         table.removeAll();
         for (Entry entry : entries) {
             TableItem item = new TableItem(table, SWT.NONE);

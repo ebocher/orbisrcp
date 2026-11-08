@@ -220,7 +220,8 @@ h2gis.getSpatialTable("pts").each { println it.the_geom.buffer(10).area }
   Ivy configuration in `~/.groovy/grapeConfig.xml`.
 - The proxy settings of DBeaver (`Preferences` > `Network Connections`) are used.
 - Local builds: after `mvn install` of a library, grab its `-SNAPSHOT` version. When the jar of `~/.m2` is newer than
-  the one cached by Grape, the new build is used (reset the context first if the library is already loaded).
+  the one cached by Grape, the new build is used (reset the context first if the library is already loaded: the
+  console says so). A context loads copies of its jars, so a jar rebuilt or updated on disk does not disturb it.
   A `-SNAPSHOT` downloaded from a remote repository is not updated automatically: delete its folder in
   `~/.groovy/grapes` to get a newer one.
 - When a script fails, the line of the error is underlined in red in the editor (from its column for a syntax

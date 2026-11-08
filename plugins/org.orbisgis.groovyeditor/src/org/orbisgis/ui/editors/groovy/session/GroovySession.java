@@ -134,7 +134,8 @@ public class GroovySession implements AutoCloseable {
                 new ReplCustomizers.ScriptVariablesCustomizer(),
                 new ASTTransformationCustomizer(ThreadInterrupt.class));
 
-        shell = new GroovyShell(GroovySession.class.getClassLoader(), binding, config);
+        // GroovyShell uses a GroovyClassLoader parent created with the same configuration as its class loader
+        shell = new GroovyShell(new SessionClassLoader(GroovySession.class.getClassLoader(), config), binding, config);
         for (URL url : ClassPathHandler.getUrlsInArray()) {
             shell.getClassLoader().addURL(url);
         }
@@ -251,6 +252,14 @@ public class GroovySession implements AutoCloseable {
      */
     public GroovyClassLoader getClassLoader() {
         return shell.getClassLoader();
+    }
+
+    /**
+     * @return the locations of the libraries of the context (the class loader reads copies of the jars)
+     */
+    public URL[] getClasspathURLs() {
+        return shell.getClassLoader() instanceof SessionClassLoader loader ? loader.getOriginalURLs()
+                : shell.getClassLoader().getURLs();
     }
 
     private void addClassPath(URL url) {

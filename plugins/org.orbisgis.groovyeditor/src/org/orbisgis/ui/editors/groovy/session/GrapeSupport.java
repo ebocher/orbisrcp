@@ -336,7 +336,7 @@ public final class GrapeSupport {
                 }
                 cachedJar.delete();
                 GroovyConsoleContent.appendLine("  newer local build of " + group + ":" + module + ":" + version
-                        + " found in " + localRepository + ", using it", Style.INFO);
+                        + " found in " + localRepository, Style.INFO);
             }
         }
 
