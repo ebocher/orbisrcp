@@ -1,13 +1,13 @@
 /*
- * Groovy Editor (GE) is a library that brings a groovy console to the Eclipse RCP. 
+ * Groovy Editor (GE) is a library that brings a groovy console to the Eclipse RCP.
  * GE is developed by CNRS http://www.cnrs.fr/.
  *
  * GE is part of the OrbisGIS project. GE is free software;
- * you can redistribute it and/or modify it under the terms of the GNU Lesser 
+ * you can redistribute it and/or modify it under the terms of the GNU Lesser
  * General Public License as published by the Free Software Foundation;
  * version 3.0 of the License.
  *
- * GE is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
+ * GE is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
  * without even the implied warranty of MERCHANTABILITY or
  * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License
  * for more details http://www.gnu.org/licenses.
@@ -18,132 +18,187 @@
  */
 package org.orbisgis.ui.editors.groovy.syntax;
 
+import org.eclipse.jface.preference.IPreferenceStore;
+import org.eclipse.jface.text.IAutoEditStrategy;
+import org.eclipse.ui.editors.text.EditorsUI;
+import org.eclipse.ui.texteditor.AbstractDecoratedTextEditorPreferenceConstants;
 import org.eclipse.jface.text.IDocument;
+import org.eclipse.jface.text.DefaultInformationControl;
 import org.eclipse.jface.text.IInformationControlCreator;
-import org.eclipse.jface.text.TextAttribute;
+import org.eclipse.jface.text.ITextViewer;
 import org.eclipse.jface.text.contentassist.ContentAssistant;
+import org.eclipse.jface.text.contentassist.ICompletionProposal;
+import org.eclipse.jface.text.contentassist.IContentAssistProcessor;
 import org.eclipse.jface.text.contentassist.IContentAssistant;
+import org.eclipse.jface.text.contentassist.IContextInformation;
+import org.eclipse.jface.text.contentassist.IContextInformationValidator;
 import org.eclipse.jface.text.presentation.IPresentationReconciler;
 import org.eclipse.jface.text.presentation.PresentationReconciler;
-import org.eclipse.jface.text.rules.*;
+import org.eclipse.jface.text.rules.DefaultDamagerRepairer;
+import org.eclipse.jface.text.rules.ITokenScanner;
 import org.eclipse.jface.text.source.ISourceViewer;
-import org.eclipse.swt.graphics.Color;
-import org.eclipse.swt.widgets.Display;
 import org.eclipse.ui.editors.text.TextSourceViewerConfiguration;
+import org.jkiss.dbeaver.ui.UIStyles;
+import org.orbisgis.ui.editors.groovy.GroovyEditor;
 import org.orbisgis.ui.editors.groovy.completion.GroovyCompletionProcessor;
+import org.orbisgis.ui.editors.groovy.completion.GroovyTemplateProcessor;
+import org.orbisgis.ui.editors.groovy.completion.vegalite.VegaLiteCompletionProcessor;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+/**
+ * Configuration of the Groovy editor: coloring and completion.
+ */
 public class GroovySourceViewerConfiguration extends TextSourceViewerConfiguration {
-	
-    public ITokenScanner tokenScanner;
-    
-    public GroovySourceViewerConfiguration() {
-		tokenScanner = createTokenScanner();
+
+    private final GroovyEditor editor;
+    private final GroovyColors colors;
+
+    public GroovySourceViewerConfiguration(GroovyEditor editor) {
+        // Tab width and spaces for tabs of the text editors (Preferences > Editors > Text Editors)
+        super(EditorsUI.getPreferenceStore());
+        this.editor = editor;
+        this.colors = GroovyColors.of(isDarkTheme());
     }
 
-	/**
-    * Allows to activate autocompletion on the text in progress
-    * @param sourceViewer the editor view
-    * @return the completion assistant
-    */
+    private static boolean isDarkTheme() {
+        try {
+            return UIStyles.isDarkTheme();
+        } catch (RuntimeException | LinkageError e) {
+            return false;
+        }
+    }
+
+    /**
+     * @return a formatter with the indentation of the text editor preferences
+     */
+    public GroovyFormatter createFormatter() {
+        IPreferenceStore store = fPreferenceStore != null ? fPreferenceStore : EditorsUI.getPreferenceStore();
+        return new GroovyFormatter(GroovyFormatter.indentUnit(
+                store.getInt(AbstractDecoratedTextEditorPreferenceConstants.EDITOR_TAB_WIDTH),
+                store.getBoolean(AbstractDecoratedTextEditorPreferenceConstants.EDITOR_SPACES_FOR_TABS)));
+    }
+
+    @Override
+    public IAutoEditStrategy[] getAutoEditStrategies(ISourceViewer sourceViewer, String contentType) {
+        return new IAutoEditStrategy[]{new GroovyAutoIndentStrategy(this::createFormatter)};
+    }
+
+    @Override
+    public String getConfiguredDocumentPartitioning(ISourceViewer sourceViewer) {
+        return GroovyPartitions.PARTITIONING;
+    }
+
+    @Override
+    public String[] getConfiguredContentTypes(ISourceViewer sourceViewer) {
+        return GroovyPartitions.CONTENT_TYPES;
+    }
+
+    /**
+     * Completion in the code (not in the comments and strings): templates first, then the members and the
+     * names of the context.
+     *
+     * @param sourceViewer the editor view
+     * @return the completion assistant
+     */
     @Override
     public IContentAssistant getContentAssistant(final ISourceViewer sourceViewer) {
-		ContentAssistant assistant = new ContentAssistant();
-		assistant.setDocumentPartitioning(getConfiguredDocumentPartitioning(sourceViewer));
-		GroovyCompletionProcessor processor = new GroovyCompletionProcessor();
-		assistant.setContentAssistProcessor(processor, IDocument.DEFAULT_CONTENT_TYPE);
-		assistant.setInformationControlCreator(getInformationControlCreator(sourceViewer));
-		assistant.enableAutoInsert(true);
-		assistant.enableAutoActivation(true);
+        ContentAssistant assistant = new ContentAssistant();
+        assistant.setDocumentPartitioning(getConfiguredDocumentPartitioning(sourceViewer));
+        VegaLiteCompletionProcessor vegaLite = new VegaLiteCompletionProcessor();
+        GroovyCompletionProcessor groovy = new GroovyCompletionProcessor(editor::getSession);
+        assistant.setContentAssistProcessor(new CompositeProcessor(
+                new GroovyTemplateProcessor(groovy::receiverType), groovy, vegaLite),
+                IDocument.DEFAULT_CONTENT_TYPE);
+        // In the strings, only the values of the Vega-Lite specifications: vegalite(mark: "ba|")
+        assistant.setContentAssistProcessor(vegaLite, GroovyPartitions.STRING);
+        assistant.setContentAssistProcessor(vegaLite, GroovyPartitions.GSTRING);
+        assistant.setInformationControlCreator(getInformationControlCreator(sourceViewer));
+        assistant.enableAutoInsert(true);
+        assistant.enableAutoActivation(true);
+        assistant.setAutoActivationDelay(300);
         assistant.enableColoredLabels(true);
-		assistant.setStatusLineVisible(true);
-		assistant.setStatusMessage("Press Enter to insert the selected option");
-        assistant.setSorter((prop0, prop1) -> prop0.getDisplayString().compareTo(prop1.getDisplayString()));
-		return assistant;
+        assistant.setStatusLineVisible(true);
+        assistant.setStatusMessage("Enter inserts the selected proposal, Tab moves to the next field of a template");
+        return assistant;
     }
 
     @Override
     public IInformationControlCreator getInformationControlCreator(ISourceViewer sourceViewer) {
-    	return null;
+        // Description of the selected proposal (Vega-Lite properties...)
+        return parent -> new DefaultInformationControl(parent, true);
     }
 
     @Override
     public IPresentationReconciler getPresentationReconciler(ISourceViewer viewer) {
-        PresentationReconciler reconciler= new PresentationReconciler();
-        DefaultDamagerRepairer defDamagerRepairer= new DefaultDamagerRepairer(tokenScanner);
-        reconciler.setDamager(defDamagerRepairer, IDocument.DEFAULT_CONTENT_TYPE);
-        reconciler.setRepairer(defDamagerRepairer, IDocument.DEFAULT_CONTENT_TYPE);
+        PresentationReconciler reconciler = new PresentationReconciler();
+        reconciler.setDocumentPartitioning(getConfiguredDocumentPartitioning(viewer));
+        register(reconciler, IDocument.DEFAULT_CONTENT_TYPE, GroovyCodeScanner.createCodeScanner(colors));
+        register(reconciler, GroovyPartitions.COMMENT, GroovyCodeScanner.createCommentScanner(colors.comment));
+        register(reconciler, GroovyPartitions.DOC_COMMENT, GroovyCodeScanner.createCommentScanner(colors.docComment));
+        register(reconciler, GroovyPartitions.STRING, GroovyCodeScanner.createStringScanner(colors));
+        register(reconciler, GroovyPartitions.GSTRING, GroovyCodeScanner.createGStringScanner(colors));
         return reconciler;
     }
 
-    private ITokenScanner createTokenScanner() {
-        RuleBasedScanner scanner= new RuleBasedScanner();
-        scanner.setRules(createRules());
-        return scanner;
+    private static void register(PresentationReconciler reconciler, String contentType, ITokenScanner scanner) {
+        DefaultDamagerRepairer damagerRepairer = new DefaultDamagerRepairer(scanner);
+        reconciler.setDamager(damagerRepairer, contentType);
+        reconciler.setRepairer(damagerRepairer, contentType);
     }
 
-    private IRule[] createRules() {
-        List<String> list = Arrays.asList(("abstract|as#assert#boolean#break#byte#case#catch#char#class#" +
-                "const#continue#def#default#do#double#else#enum#extends#false#final#finally#float#for#goto#if#" +
-                "implements#import#in#instanceof#interface#long#native#new#null#package#private#protected#public#" +
-                "return#super#switch#synchronized#this#threadsafe#throw#throws#trait#transient#true#try#void#" +
-                "volatile#while").split("#"));
+    /**
+     * Merges the proposals of several processors.
+     */
+    private static final class CompositeProcessor implements IContentAssistProcessor {
+        private final GroovyTemplateProcessor templates;
+        private final GroovyCompletionProcessor completion;
+        private final VegaLiteCompletionProcessor vegaLite;
 
-        Color darkYellow = new Color(Display.getDefault(), 103, 103, 0);
-        Color green = new Color(Display.getDefault(), 0, 138, 0);
-        Color orange = new Color(Display.getDefault(), 138, 69, 0);
-        Color blue = new Color(Display.getDefault(), 0, 103, 138);
-        Color gray = new Color(Display.getDefault(), 169, 169, 169);
-
-        IToken annotationToken = new Token(new TextAttribute(darkYellow));
-        IToken groovyDocToken = new Token(new TextAttribute(green));
-        IToken stringToken = new Token(new TextAttribute(green));
-        IToken keywordToken = new Token(new TextAttribute(orange));
-        IToken numberToken = new Token(new TextAttribute(blue));
-        IToken commentToken = new Token(new TextAttribute(gray));
-
-        IRule commentLineRule = new SingleLineRule("//", "\n", commentToken);
-        IRule commentBlockRule = new MultiLineRule("/*", "*/", commentToken);
-        IRule groovyDocBlockRule = new MultiLineRule("/**", "*/", groovyDocToken);
-        IRule keywordRule = new KeywordRule(list, keywordToken);
-        IRule multiLineDoubleQuoteStringRule = new MultiLineRule("\"", "\"", stringToken, '\\');
-        IRule multiLineSingleQuoteStringRule = new MultiLineRule("'", "'", stringToken, '\u0000');
-        IRule annotationRule = new SingleLineRule("@", "\n", annotationToken);
-        IRule numberRule = new NumberRule(numberToken);
-
-        return new IRule[] {commentLineRule, commentBlockRule, groovyDocBlockRule, keywordRule,
-                multiLineDoubleQuoteStringRule, multiLineSingleQuoteStringRule, annotationRule, numberRule};
-    }
-
-    static class KeywordRule implements IRule{
-
-        private final IToken token;
-        private final List<String> keywords;
-
-        public KeywordRule(List<String> keywords, IToken token){
-            this.keywords = keywords;
-            this.token = token;
+        CompositeProcessor(GroovyTemplateProcessor templates, GroovyCompletionProcessor completion,
+                           VegaLiteCompletionProcessor vegaLite) {
+            this.templates = templates;
+            this.completion = completion;
+            this.vegaLite = vegaLite;
         }
 
         @Override
-        public IToken evaluate(ICharacterScanner iCharacterScanner) {
-            StringBuilder buffer = new StringBuilder();
-            int i;
-            while(Character.isLetter(i = iCharacterScanner.read())){
-                buffer.append((char)i);
+        public ICompletionProposal[] computeCompletionProposals(ITextViewer viewer, int offset) {
+            // In a Vega-Lite specification, only its proposals: they do not mix with the Groovy ones
+            ICompletionProposal[] specification = vegaLite.proposals(viewer, offset);
+            if (specification != null) {
+                return specification;
             }
-            iCharacterScanner.unread();
-            if(keywords.contains(buffer.toString())){
-                return token;
-            }
-            else {
-                for(int j=0; j<buffer.length(); j++){
-                    iCharacterScanner.unread();
-                }
-                return Token.UNDEFINED;
-            }
+            List<ICompletionProposal> proposals = new ArrayList<>(templates.computeTemplateProposals(viewer, offset));
+            proposals.addAll(Arrays.asList(completion.computeCompletionProposals(viewer, offset)));
+            return proposals.toArray(new ICompletionProposal[0]);
+        }
+
+        @Override
+        public IContextInformation[] computeContextInformation(ITextViewer viewer, int offset) {
+            return null;
+        }
+
+        @Override
+        public char[] getCompletionProposalAutoActivationCharacters() {
+            return completion.getCompletionProposalAutoActivationCharacters();
+        }
+
+        @Override
+        public char[] getContextInformationAutoActivationCharacters() {
+            return null;
+        }
+
+        @Override
+        public String getErrorMessage() {
+            return null;
+        }
+
+        @Override
+        public IContextInformationValidator getContextInformationValidator() {
+            return null;
         }
     }
 }

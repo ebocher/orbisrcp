@@ -23,9 +23,7 @@ package org.orbisgis.h2gis;
 import org.jkiss.code.NotNull;
 import org.jkiss.dbeaver.DBException;
 import org.jkiss.dbeaver.ext.generic.GenericDataSourceProvider;
-import org.jkiss.dbeaver.ext.h2.model.H2MetaModel;
 import org.orbisgis.h2gis.model.H2GISDataSource;
-import org.jkiss.dbeaver.model.DBPDataSource;
 import org.jkiss.dbeaver.model.DBPDataSourceContainer;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 
@@ -36,14 +34,20 @@ import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
  * @author Erwan Bocher, CNRS
  * @author Serge Rider (serge@jkiss.org)
  */
-public class H2GISSnapshotDataSourceProvider extends GenericDataSourceProvider {
+public class H2GISSnapshotDataSourceProvider extends GenericDataSourceProvider<H2GISDataSource> {
 
     public H2GISSnapshotDataSourceProvider() {
+        super(H2GISDataSource.class);
+    }
+
+    @Override
+    public long getFeatures() {
+        return FEATURE_SCHEMAS;
     }
 
     @NotNull
     @Override
-    public DBPDataSource openDataSource(@NotNull DBRProgressMonitor monitor, @NotNull DBPDataSourceContainer container) throws DBException {
-        return new H2GISDataSource(monitor, container, new H2MetaModel());
+    public H2GISDataSource openDataSource(@NotNull DBRProgressMonitor monitor, @NotNull DBPDataSourceContainer container) throws DBException {
+        return new H2GISDataSource(monitor, container);
     }
 }

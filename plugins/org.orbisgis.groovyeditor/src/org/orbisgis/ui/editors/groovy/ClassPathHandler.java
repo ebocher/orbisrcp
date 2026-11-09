@@ -19,156 +19,106 @@
  */
 package org.orbisgis.ui.editors.groovy;
 
-import org.eclipse.swt.SWT;
-import org.eclipse.swt.widgets.DirectoryDialog;
-import org.eclipse.swt.widgets.FileDialog;
-import org.eclipse.swt.widgets.Shell;
-import org.eclipse.ui.PlatformUI;
 import org.orbisgis.core.logger.Logger;
-import org.orbisgis.ui.editors.groovy.ui.ScrollableDialog;
 
 import java.io.File;
-import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.HashSet;
-import java.util.stream.Stream;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Consumer;
 
 /**
- * Methods to handle the urls that are taken into account as classPaths in the groovyShell runtime.
+ * Jars and directories added by the user to the classpath of the Groovy scripts (see the Classpath dialog).
  *
- * @author Adrien Bessy, CNRS
+ * A path added here is immediately available in the open Groovy sessions. A removed path stays loaded in
+ * the open sessions until their context is reset.
  */
-public class ClassPathHandler{
+public class ClassPathHandler {
 
 	private static final Logger LOGGER = new Logger(ClassPathHandler.class);
-	private static HashSet<URL> urls = new HashSet<>();
 
-	/**
-	 * Open a dialog showing the list of urls.
-	 *
-	 */
-	public static void showClassPaths() {
-        Shell shell = PlatformUI.getWorkbench().getActiveWorkbenchWindow().getShell();
-        ScrollableDialog dialog = new ScrollableDialog(shell, "List of class paths", urls);
-        dialog.open();
-    }
-	
-	/**
-	 * Add a directory path, choosen by the user, to the list of urls.
-	 *
-	 */
-	public static void addDirPathToPathList() {
-	    Shell shell = PlatformUI.getWorkbench().getActiveWorkbenchWindow().getShell();
-	    DirectoryDialog dialog = new DirectoryDialog(shell);
-	    String result = dialog.open();
-		addPathToUrlList(result, false);
-	}
-	
-	/**
-	 * Add a jar path, choosen by the user, to the list of urls.
-	 *
-	 */
-	public static void addJarPathToPathList() {
-		Shell shell = PlatformUI.getWorkbench().getActiveWorkbenchWindow().getShell();
-		FileDialog dialog = new FileDialog( shell, SWT.SINGLE );
-		String[] filterExt = { "*.jar" };
-		dialog.setFilterExtensions(filterExt);
-	    String result = dialog.open();
-		addPathToUrlList(result, true);
+	private static final LinkedHashSet<URL> urls = new LinkedHashSet<>();
+
+	private static final List<Consumer<URL>> listeners = new CopyOnWriteArrayList<>();
+
+	private ClassPathHandler() {
 	}
 
 	/**
-	 * Add a path to the list of urls.
-	 * @param result the file name of the file choosen by the user
-	 * @param jar true if it is a jar file
+	 * Add a path (jar file or directory) to the list of urls.
+	 *
+	 * @param path the path of the file or directory chosen by the user, may be null (dialog cancelled)
 	 */
-	public static void addPathToUrlList(String result, boolean jar) {
+	public static void addPathToUrlList(String path) {
+		if (path == null || path.isBlank()) {
+			return;
+		}
 		try {
-			if (result != null) {
-				if(jar) {
-					result = result + "!/";
-				}
-				else{
-					result = "///d:" + result;
-				}
-				urls.add(new File(result).toURI().toURL());
+			URL url = new File(path).toURI().toURL();
+			boolean added;
+			synchronized (urls) {
+				added = urls.add(url);
+			}
+			if (added) {
+				listeners.forEach(listener -> listener.accept(url));
 			}
 		} catch (MalformedURLException e) {
-			LOGGER.error("MalformedURLException", e);
+			LOGGER.error("Invalid path '" + path + "'", e);
 		}
 	}
 
 	/**
-	 * Get Urls list.
-	 * @return A Set of URLs
-	 *
+	 * @return a copy of the user classpath, in insertion order
 	 */
-	public static HashSet<URL> getUrls(){
-		return urls;
+	public static LinkedHashSet<URL> getUrls() {
+		synchronized (urls) {
+			return new LinkedHashSet<>(urls);
+		}
 	}
-	
+
 	/**
-	 * Transform the ArrayList of urls to URL[] and retrieve it.
-	 * @return A list of URLs
-	 *
+	 * @return a copy of the user classpath, in insertion order
 	 */
 	public static URL[] getUrlsInArray() {
-		URL[] result;
-		if (urls != null) {
-	        result = urls.toArray( new URL[0] );
-	    }
-	    else{
-	        result = new URL[0];
-	    }
-	    return result;
+		return getUrls().toArray(new URL[0]);
 	}
-	
+
 	/**
-	 * Delete one URL in the urls list.
-	 * @param index the index of the urls list to remove
+	 * Remove an url from the user classpath.
 	 *
+	 * @param url the url to remove
 	 */
-	public static void deleteOneURL(int index) throws MalformedURLException{
-		if (index <= urls.size()) {
-	        urls.remove(index);
-	    }
+	public static void removeURL(URL url) {
+		synchronized (urls) {
+			urls.remove(url);
+		}
 	}
 
 	/**
-	 * This method check the /.groovy folder to load all jars and expose them
-	 * to the groovy classloader
+	 * Remove the url at the given index of the user classpath.
+	 *
+	 * @param index the index of the url to remove
 	 */
-	public static void initGroovyGrabFolder(){
-		File grabFolder = new File(System.getProperty("user.home") + File.separator + "/.groovy");
-		if(grabFolder.exists()&& grabFolder.isDirectory()){
-			try (Stream<Path> walk = Files.walk(grabFolder.toPath())) {
-				HashSet<URL> groovyJars = new HashSet<>();
-					walk
-							.filter(p -> !Files.isDirectory(p))   // not a directory
-							.forEach(p -> {
-								String name = p.getFileName().toString();
-								if (name.endsWith("jar")) {
-									try {
-										groovyJars.add(p.toUri().toURL());
-									} catch (MalformedURLException e) {
-										//eat
-									}
-								}
-							});
-
-				if(urls!=null){
-					groovyJars.addAll(urls);
-					urls = groovyJars;
-				}
-
-
-			} catch (IOException e) {
-				e.printStackTrace();
+	public static void deleteOneURL(int index) {
+		synchronized (urls) {
+			List<URL> list = new ArrayList<>(urls);
+			if (index >= 0 && index < list.size()) {
+				urls.remove(list.get(index));
 			}
 		}
 	}
 
+	/**
+	 * Register a listener called each time a new url is added.
+	 */
+	public static void addListener(Consumer<URL> listener) {
+		listeners.add(listener);
+	}
+
+	public static void removeListener(Consumer<URL> listener) {
+		listeners.remove(listener);
+	}
 }

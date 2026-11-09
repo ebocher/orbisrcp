@@ -1,11 +1,29 @@
-<html>
-    <head>
-        <title>Orbisgis Eclipse repository</title>
-        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-        <style>@import url("web/site.css");</style>
-    </head>
-
-    <body onload="init();">
-        <div id="data"><!-- Generated data are place here --></div>
-    </body>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OrbisRCP update site</title>
+<style>
+  body { font-family: sans-serif; max-width: 46rem; margin: 2rem auto; padding: 0 1rem; color: #222; line-height: 1.5; }
+  code { background: #f2f2f2; padding: 0.1rem 0.3rem; border-radius: 3px; }
+  pre { background: #f2f2f2; padding: 0.6rem 0.8rem; border-radius: 4px; overflow-x: auto; }
+  .muted { color: #777; font-size: 0.9rem; }
+</style>
+</head>
+<body>
+<h1>OrbisRCP update site</h1>
+<p>This address is a p2 repository: the plugins of <a href="https://github.com/orbisgis/orbisrcp">OrbisRCP</a>
+for <a href="https://dbeaver.io">DBeaver</a>.</p>
+<ul>
+  <li><b>Groovy editor</b>: a Groovy console with completion, <code>@Grab</code>, access to the DBeaver connections,
+    Vega-Lite charts.</li>
+  <li><b>H2GIS snapshot</b>: drivers following the development version of H2GIS.</li>
+</ul>
+<h2>Install</h2>
+<p>In DBeaver: <i>Help &gt; Install New Software...</i>, <i>Add...</i>, and give this location:</p>
+<pre>https://orbisgis.github.io/orbisrcp/</pre>
+<p>Updates: <i>Help &gt; Check for Updates</i>.</p>
+<p class="muted">Built on @DATE@ from commit @COMMIT@.</p>
+</body>
 </html>

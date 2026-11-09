@@ -57,22 +57,22 @@ or contact directly: info_at_orbisgis.org
       <import plugin="org.eclipse.core.resources"/>
       <import plugin="org.eclipse.core.expressions"/>
       <import plugin="org.eclipse.core.filesystem"/>
+      <import plugin="org.eclipse.core.filebuffers"/>
       <import plugin="org.eclipse.ui"/>
       <import plugin="org.eclipse.jface.text"/>
       <import plugin="org.eclipse.ui.editors"/>
       <import plugin="org.eclipse.ui.ide"/>
       <import plugin="org.eclipse.ui.workbench.texteditor"/>
+      <import plugin="org.jkiss.dbeaver.model"/>
+      <import plugin="org.jkiss.dbeaver.model.jdbc"/>
+      <import plugin="org.jkiss.dbeaver.ui"/>
+      <import plugin="org.jkiss.dbeaver.ui.editors.sql"/>
+      <import plugin="org.jkiss.dbeaver.ui.navigator"/>
+      <import plugin="org.jkiss.dbeaver.data.gis"/>
    </requires>
 
    <plugin
          id="org.orbisgis.core"
-         download-size="0"
-         install-size="0"
-         version="0.0.0"
-         unpack="false"/>
-
-   <plugin
-         id="dependencies"
          download-size="0"
          install-size="0"
          version="0.0.0"/>

@@ -1,13 +1,13 @@
 /*
- * Groovy Editor (GE) is a library that brings a groovy console to the Eclipse RCP. 
+ * Groovy Editor (GE) is a library that brings a groovy console to the Eclipse RCP.
  * GE is developed by CNRS http://www.cnrs.fr/.
  *
  * GE is part of the OrbisGIS project. GE is free software;
- * you can redistribute it and/or modify it under the terms of the GNU Lesser 
+ * you can redistribute it and/or modify it under the terms of the GNU Lesser
  * General Public License as published by the Free Software Foundation;
  * version 3.0 of the License.
  *
- * GE is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
+ * GE is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
  * without even the implied warranty of MERCHANTABILITY or
  * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License
  * for more details http://www.gnu.org/licenses.
@@ -18,137 +18,206 @@
  */
 package org.orbisgis.ui.editors.groovy;
 
-import java.io.PrintWriter;
-import java.io.StringWriter;
-import java.net.URLClassLoader;
-
-import org.codehaus.groovy.control.CompilerConfiguration;
-import org.codehaus.groovy.control.customizers.ASTTransformationCustomizer;
+import org.codehaus.groovy.control.MultipleCompilationErrorsException;
+import org.orbisgis.ui.editors.groovy.syntax.BracketChecker;
+import org.codehaus.groovy.control.messages.ExceptionMessage;
+import org.codehaus.groovy.control.messages.Message;
+import org.codehaus.groovy.control.messages.SimpleMessage;
+import org.codehaus.groovy.control.messages.SyntaxErrorMessage;
+import org.codehaus.groovy.runtime.FormatHelper;
+import org.codehaus.groovy.runtime.StackTraceUtils;
+import org.codehaus.groovy.syntax.SyntaxException;
 import org.eclipse.core.runtime.IProgressMonitor;
 import org.eclipse.core.runtime.IStatus;
 import org.eclipse.core.runtime.Status;
 import org.eclipse.core.runtime.jobs.Job;
 import org.orbisgis.core.logger.Logger;
 import org.orbisgis.ui.editors.groovy.GroovyOutputConsole.GroovyConsoleContent;
-import org.orbisgis.ui.editors.groovy.logger.GroovyLogger;
+import org.orbisgis.ui.editors.groovy.GroovyOutputConsole.Style;
+import org.orbisgis.ui.editors.groovy.session.GroovySession;
+import org.orbisgis.ui.editors.groovy.session.ScriptErrors;
+import org.orbisgis.ui.editors.groovy.session.ScriptErrors.ScriptError;
 
-import groovy.lang.Binding;
-import groovy.lang.GroovyShell;
-import groovy.transform.ThreadInterrupt;
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.Consumer;
 
+/**
+ * Job running a script in the Groovy session of an editor.
+ *
+ * The script runs in its own thread: cancelling the job interrupts it. The scripts are compiled with
+ * {@code @ThreadInterrupt}, so loops stop at the next iteration; a blocking call (JDBC query...) stops
+ * only if it reacts to the interruption.
+ */
 public class GroovyJob extends Job {
 
     private static final Logger LOGGER = new Logger(GroovyJob.class);
 
-    private String script;
-    private GroovyShell shell = null;
-    private Binding binding;
-    private String name;
-    private Thread t;
+    private static final int MAX_RESULT_LENGTH = 2000;
+    private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm:ss");
 
-    public GroovyJob(String name, String script) {
-        super(name);
+    private final GroovySession session;
+    private final String script;
+    private final String scriptName;
+    private Consumer<List<ScriptError>> errorListener;
+
+    public GroovyJob(GroovySession session, String scriptName, String script) {
+        super("Groovy: " + scriptName);
+        this.session = session;
         this.script = script;
-        this.name = name;
-        binding = new Binding();
-        binding.setProperty("logger", new GroovyLogger(GroovyShell.class));
-        binding.setProperty("out", new StringWriter());
-        
-        CompilerConfiguration configuratorConfig = new CompilerConfiguration(System.getProperties());
-        configuratorConfig.addCompilationCustomizers(new ASTTransformationCustomizer(ThreadInterrupt.class));
-   
-        try {
-            ClassPathHandler.initGroovyGrabFolder();
-        	URLClassLoader classLoader = new URLClassLoader( ClassPathHandler.getUrlsInArray(), Thread.currentThread().getContextClassLoader() );
-        	shell = new GroovyShell(classLoader, binding, configuratorConfig);
-        }  catch (Exception e) {
-            LOGGER.warn("Unable to create GroovyShell instead.");
-        }
+        this.scriptName = scriptName;
+        setUser(false);
+    }
+
+    /**
+     * @param errorListener called with the positions of the error in the script when the script fails
+     */
+    public void setErrorListener(Consumer<List<ScriptError>> errorListener) {
+        this.errorListener = errorListener;
     }
 
     @Override
-    protected IStatus run(IProgressMonitor iProgressMonitor) {
-        GroovyRunnable run = new GroovyRunnable(shell, name, script, binding);
-        t = new Thread(run);
-        t.start();
-        int status = IStatus.ERROR;
+    protected IStatus run(IProgressMonitor monitor) {
+        monitor.beginTask("Running " + scriptName, IProgressMonitor.UNKNOWN);
+        GroovyConsoleContent.appendLine("\n--- " + scriptName + " (" + LocalTime.now().format(TIME_FORMAT) + ")", Style.INFO);
+
+        long printedBefore = session.getPrintedChars();
+        Runner runner = new Runner();
+        Thread thread = new Thread(runner, "Groovy script " + scriptName);
+        thread.setDaemon(true);
+        long start = System.currentTimeMillis();
+        thread.start();
+        boolean cancelled = false;
         try {
-            t.join();
-            status = run.getStatus();
+            while (thread.isAlive()) {
+                thread.join(200);
+                if (monitor.isCanceled() && !cancelled) {
+                    cancelled = true;
+                    GroovyConsoleContent.appendLine("Stopping the script...", Style.INFO);
+                    thread.interrupt();
+                }
+            }
         } catch (InterruptedException e) {
-            LOGGER.error("Unable to execute the Groovy script thread.", e);
-        } catch (Exception e){
-            LOGGER.error("Error while execution the Groovy script.", e);
+            thread.interrupt();
+            Thread.currentThread().interrupt();
+        } finally {
+            monitor.done();
         }
-        Object result = run.getResult();
-        String message =  "Groovy script successfully executed.";
-        if(result != null){
-            message = result.toString();
+        String duration = formatDuration(System.currentTimeMillis() - start);
+
+        if (runner.error != null) {
+            if (cancelled) {
+                GroovyConsoleContent.appendLine("Script stopped (" + duration + ").", Style.ERROR);
+            } else {
+                // Locate the error before formatting it: the stack trace is cleaned when it is formatted
+                List<ScriptError> errors = ScriptErrors.locate(runner.error, scriptName);
+                // A missing or extra bracket is reported by Groovy where it gives up, often far away (at the
+                // start of the call): the brackets without a matching one are shown instead
+                List<BracketChecker.Problem> brackets = isSyntaxError(runner.error)
+                        ? BracketChecker.check(script) : List.of();
+                if (!brackets.isEmpty()) {
+                    errors = new ArrayList<>();
+                    for (BracketChecker.Problem problem : brackets) {
+                        errors.add(new ScriptError(problem.line(), problem.column(), problem.line(),
+                                problem.column() + 1, problem.message()));
+                        GroovyConsoleContent.appendLine(problem.message() + " (line " + problem.line()
+                                + ", column " + problem.column() + ")", Style.ERROR);
+                    }
+                }
+                if (errorListener != null && !errors.isEmpty()) {
+                    errorListener.accept(errors);
+                }
+                GroovyConsoleContent.append(formatError(runner.error), Style.ERROR);
+                GroovyConsoleContent.appendLine("Error while executing the Groovy script (" + duration + ").", Style.ERROR);
+            }
+            return cancelled ? Status.CANCEL_STATUS : Status.OK_STATUS;
         }
-        if(status == IStatus.OK) {
-            LOGGER.info(message);
+        // The value of the last expression is shown when the script printed nothing: a script ending with
+        // list.each { println it } does not need the list again
+        if (runner.result != null && session.getPrintedChars() == printedBefore) {
+            GroovyConsoleContent.appendLine("Result: " + formatResult(runner.result), Style.RESULT);
         }
-        return new Status(IStatus.OK, GroovyJob.class.getName(), message);
+        GroovyConsoleContent.appendLine("Groovy script successfully executed (" + duration + ").", Style.SUCCESS);
+        return Status.OK_STATUS;
     }
 
-    @Override
-    protected void canceling() {
-        super.canceling();
-        if(t.isAlive()) {
-            t.interrupt();
-        }
+    private static boolean isSyntaxError(Throwable error) {
+        return error instanceof MultipleCompilationErrorsException compilationErrors
+                && compilationErrors.getErrorCollector().getErrors().stream().anyMatch(m -> m instanceof SyntaxErrorMessage);
     }
 
-    private class GroovyRunnable implements Runnable{
+    private static String formatResult(Object result) {
+        String text = FormatHelper.format(result, false, MAX_RESULT_LENGTH, true);
+        return text.length() > MAX_RESULT_LENGTH ? text.substring(0, MAX_RESULT_LENGTH) + "..." : text;
+    }
 
-        private Object result = null;
-        private GroovyShell shell;
-        private String script;
-        private Binding binding;
-        private String name;
-        private int status;
-        private StringWriter sw = new StringWriter();
-        private PrintWriter pw = new PrintWriter(sw);
-
-        public GroovyRunnable(GroovyShell shell, String name, String script, Binding binding){
-            this.shell = shell;
-            this.script = script;
-            this.binding = binding;
-            this.name = name;
+    static String formatError(Throwable error) {
+        if (error instanceof MultipleCompilationErrorsException compilationErrors) {
+            return formatCompilationErrors(compilationErrors);
         }
+        StringWriter sw = new StringWriter();
+        StackTraceUtils.deepSanitize(error).printStackTrace(new PrintWriter(sw));
+        return sw.toString();
+    }
+
+    /**
+     * One line per compilation error, without the stack traces of the exceptions raised during the
+     * compilation (an unresolved @Grab...).
+     */
+    static String formatCompilationErrors(MultipleCompilationErrorsException exception) {
+        StringBuilder sb = new StringBuilder();
+        boolean grabError = false;
+        for (Message message : exception.getErrorCollector().getErrors()) {
+            String text;
+            if (message instanceof SyntaxErrorMessage syntaxError) {
+                SyntaxException cause = syntaxError.getCause();
+                text = cause.getOriginalMessage() + " (line " + cause.getLine() + ", column " + cause.getStartColumn() + ")";
+            } else if (message instanceof ExceptionMessage exceptionMessage) {
+                Exception cause = exceptionMessage.getCause();
+                text = cause.getMessage() != null ? cause.getMessage() : cause.toString();
+                grabError |= text.contains("Error grabbing Grapes");
+            } else if (message instanceof SimpleMessage simpleMessage) {
+                text = simpleMessage.getMessage();
+            } else {
+                StringWriter sw = new StringWriter();
+                message.write(new PrintWriter(sw));
+                text = sw.toString().trim();
+            }
+            sb.append(text).append('\n');
+        }
+        if (grabError) {
+            sb.append("Check the coordinates of the library, the network and proxy settings, or add its repository with @GrabResolver.\n");
+        }
+        return sb.length() > 0 ? sb.toString() : exception.getMessage() + "\n";
+    }
+
+    private static String formatDuration(long millis) {
+        if (millis < 1000) {
+            return millis + " ms";
+        }
+        long seconds = millis / 1000;
+        if (seconds < 60) {
+            return String.format("%.1f s", millis / 1000.0);
+        }
+        return String.format("%d min %02d s", seconds / 60, seconds % 60);
+    }
+
+    private class Runner implements Runnable {
+        private volatile Object result;
+        private volatile Throwable error;
 
         @Override
         public void run() {
             try {
-                shell.run(script,name, new String[] {});
-                String outputStream = shell.getProperty("out").toString();
-                GroovyConsoleContent.writeFileNameIntoConsole(name);
-                GroovyConsoleContent.writeIntoConsole(outputStream, true);
-                GroovyConsoleContent.writeIntoConsole("END");
-                LOGGER.trace(outputStream);
-                status = IStatus.OK;
-            } catch (Exception e){
-                e.printStackTrace(pw);
-                String sStackTrace = sw.toString();
-            	GroovyConsoleContent.writeFileNameIntoConsole(name);
-                GroovyConsoleContent.writeIntoConsole(sStackTrace);
-                GroovyConsoleContent.writeIntoConsole("BAD_END");
-                LOGGER.trace(sStackTrace);   
-                status = IStatus.ERROR;
+                result = session.run(script, scriptName);
+            } catch (Throwable e) {
+                error = e;
+                LOGGER.trace("Error in the Groovy script " + scriptName, e);
             }
         }
-
-        public Object getResult(){
-            return result;
-        }
-
-        public int getStatus(){
-            return status;
-        }
     }
-    
-    public void setShell(GroovyShell shell) {
-		this.shell = shell;
-	}
-
 }

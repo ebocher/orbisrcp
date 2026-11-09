@@ -105,7 +105,7 @@ public class CoreWorkspace implements ICoreWorkspace {
     public IFile getFile(String path){
         IProject project = getOpenProject();
         if(project != null){
-            project.getFile(path);
+            return project.getFile(path);
         }
         LOGGER.error("No open project found");
         return null;

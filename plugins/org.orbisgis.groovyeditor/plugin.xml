@@ -61,19 +61,19 @@
             name="Stop the running process"> </command>
       <command
               categoryId="org.orbisgis.ui.editors.groovy"
-              description="List the current class paths"
+              description="Forget the variables, imports and libraries of the console"
+              id="org.orbisgis.ui.editors.groovy.resetContext"
+              name="Reset the Groovy context"> </command>
+      <command
+              categoryId="org.orbisgis.ui.editors.groovy"
+              description="Libraries of the console: @Grab libraries, added jars and folders"
               id="org.orbisgis.ui.editors.groovy.listClasspaths"
-              name="List the current class paths"> </command>
+              name="Classpath"> </command>
       <command
               categoryId="org.orbisgis.ui.editors.groovy"
-              description="Add directory to classPath"
-              id="org.orbisgis.ui.editors.groovy.addDirectoryToClasspaths"
-              name="Add directory to classPath"> </command>
-      <command
-              categoryId="org.orbisgis.ui.editors.groovy"
-              description="Add jar to classPath"
-              id="org.orbisgis.ui.editors.groovy.addJarToClasspath"
-              name="Add jar to classPath"> </command>
+              description="Indent the selected lines, or the whole script"
+              id="org.orbisgis.ui.editors.groovy.format"
+              name="Format"> </command>
 
    </extension>
 
@@ -84,9 +84,8 @@
       <image commandId="org.orbisgis.ui.editors.groovy.clear" icon="icons/erase.png"/>
 	  <image commandId="org.orbisgis.ui.editors.groovy.clearOutput" icon="icons/erase.png"/>
       <image commandId="org.orbisgis.ui.editors.groovy.stopProcess" icon="icons/stop.png"/>
+      <image commandId="org.orbisgis.ui.editors.groovy.resetContext" icon="icons/reset.png"/>
       <image commandId="org.orbisgis.ui.editors.groovy.listClasspaths" icon="icons/show_classpath.png"/>
-      <image commandId="org.orbisgis.ui.editors.groovy.addDirectoryToClasspaths" icon="icons/folder_add.png"/>
-	  <image commandId="org.orbisgis.ui.editors.groovy.addJarToClasspath" icon="icons/add_jar.png"/>
    </extension>
 
    <extension point="org.eclipse.ui.handlers">
@@ -116,15 +115,11 @@
       </handler>
       <handler
               class="org.orbisgis.ui.editors.groovy.handlers.GroovyEditorActionHandler"
+              commandId="org.orbisgis.ui.editors.groovy.resetContext">
+      </handler>
+      <handler
+              class="org.orbisgis.ui.editors.groovy.handlers.GroovyEditorActionHandler"
               commandId="org.orbisgis.ui.editors.groovy.listClasspaths">
-      </handler>
-      <handler
-              class="org.orbisgis.ui.editors.groovy.handlers.GroovyEditorActionHandler"
-              commandId="org.orbisgis.ui.editors.groovy.addDirectoryToClasspaths">
-      </handler>
-      <handler
-              class="org.orbisgis.ui.editors.groovy.handlers.GroovyEditorActionHandler"
-              commandId="org.orbisgis.ui.editors.groovy.addJarToClasspath">
       </handler>
    </extension>
 
@@ -132,11 +127,19 @@
         <view
                 id="org.jkiss.dbeaver.groovy.output"
                 class="org.orbisgis.ui.editors.groovy.GroovyOutputConsole"
-                allowMultiple="true"
+                allowMultiple="false"
                 restorable="true"
                 name="Groovy Output"
 				icon="icons/groovy_output.png"
 		>
+        </view>
+        <view
+                id="org.orbisgis.ui.editors.groovy.htmlView"
+                class="org.orbisgis.ui.editors.groovy.html.HtmlView"
+                allowMultiple="true"
+                restorable="false"
+                name="Groovy Chart"
+                icon="icons/groovy_output.png">
         </view>
     </extension>
 
@@ -177,6 +180,12 @@
               contextId="org.orbisgis.ui.editors.groovy"
               schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
               sequence="CTRL+W">
+      </key>
+      <key
+              commandId="org.orbisgis.ui.editors.groovy.format"
+              contextId="org.orbisgis.ui.editors.groovy"
+              schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
+              sequence="M1+M2+F">
       </key>
    </extension>
    <extension

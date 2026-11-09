@@ -19,29 +19,64 @@
 package org.orbisgis.ui.editors.groovy;
 
 import org.eclipse.core.runtime.NullProgressMonitor;
+import org.eclipse.jface.action.Action;
+import org.eclipse.jface.action.IAction;
+import org.eclipse.jface.action.IMenuManager;
 import org.eclipse.jface.resource.ImageDescriptor;
+import org.eclipse.jface.preference.IPreferenceStore;
+import org.eclipse.jface.preference.PreferenceConverter;
+import org.eclipse.jface.preference.PreferenceStore;
+import org.eclipse.jface.text.DocumentEvent;
+import org.eclipse.jface.text.IDocumentListener;
+import org.eclipse.jface.text.source.DefaultCharacterPairMatcher;
+import org.eclipse.swt.graphics.RGB;
+import org.eclipse.ui.editors.text.EditorsUI;
+import org.eclipse.ui.texteditor.ChainedPreferenceStore;
+import org.eclipse.ui.texteditor.SourceViewerDecorationSupport;
+import org.jkiss.dbeaver.ui.UIStyles;
+import org.orbisgis.ui.editors.groovy.syntax.BracketChecker;
+import org.eclipse.jface.text.BadLocationException;
 import org.eclipse.jface.text.IDocument;
+import org.eclipse.jface.text.IRegion;
+import org.eclipse.jface.text.Position;
+import org.eclipse.jface.text.source.Annotation;
+import org.eclipse.jface.text.source.IAnnotationModel;
 import org.eclipse.jface.text.ITextSelection;
 import org.eclipse.jface.text.ITextViewerExtension;
 import org.eclipse.jface.text.source.ISourceViewer;
 import org.eclipse.jface.text.source.IVerticalRuler;
 import org.eclipse.swt.SWT;
+import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.layout.GridData;
 import org.eclipse.swt.layout.GridLayout;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.ui.ISaveablePart2;
+import org.eclipse.ui.editors.text.ForwardingDocumentProvider;
+import org.eclipse.ui.editors.text.TextFileDocumentProvider;
 import org.eclipse.ui.texteditor.AbstractDecoratedTextEditor;
 import org.eclipse.ui.texteditor.IDocumentProvider;
+import org.eclipse.ui.texteditor.ITextEditorActionConstants;
+import org.eclipse.ui.texteditor.ITextEditorActionDefinitionIds;
+import org.eclipse.ui.texteditor.TextOperationAction;
 import org.jkiss.dbeaver.ui.UIUtils;
 import org.jkiss.dbeaver.ui.controls.VerticalButton;
 import org.jkiss.dbeaver.ui.controls.VerticalFolder;
 import org.orbisgis.core.logger.Logger;
+import org.orbisgis.ui.editors.groovy.GroovyOutputConsole.GroovyConsoleContent;
+import org.orbisgis.ui.editors.groovy.GroovyOutputConsole.Style;
+import org.orbisgis.ui.editors.groovy.session.GroovySession;
+import org.orbisgis.ui.editors.groovy.session.ScriptErrors.ScriptError;
+import org.orbisgis.ui.editors.groovy.syntax.GroovyFormatter;
+import org.orbisgis.ui.editors.groovy.syntax.GroovyPartitions;
 import org.orbisgis.ui.editors.groovy.syntax.GroovySourceViewerConfiguration;
 
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.List;
+import java.util.ListResourceBundle;
+import java.util.ResourceBundle;
 
 public class GroovyEditor extends AbstractDecoratedTextEditor implements ISaveablePart2 {
 
@@ -51,12 +86,69 @@ public class GroovyEditor extends AbstractDecoratedTextEditor implements ISaveab
     private static final int SIDE_TOOLBAR_MARGIN_BOTTOM = 10;
     private static final int SIDE_TOOLBAR_VERTICAL_SPACING = 3;
 
+    private static final String CONTENT_ASSIST_ACTION = "ContentAssistProposal";
+
+    private static final String FORMAT_ACTION = "GroovyFormat";
+
+    /** Command of the formatting (Ctrl+Shift+F) */
+    public static final String FORMAT_COMMAND = "org.orbisgis.ui.editors.groovy.format";
+
+    /** Standard error annotation: red underline, marker in the ruler and the overview ruler */
+    private static final String ERROR_ANNOTATION_TYPE = "org.eclipse.ui.workbench.texteditor.error";
+
+    /** Errors of the last execution shown in the editor */
+    private final List<Annotation> errorAnnotations = new ArrayList<>();
+
+    /** Brackets without a matching one, marked while typing */
+    private final List<Annotation> bracketAnnotations = new ArrayList<>();
+
+    /** Delay of the bracket check after the last change (ms) */
+    private static final int BRACKET_CHECK_DELAY = 500;
+
+    private final Runnable bracketCheck = this::checkBrackets;
+
+    private final IDocumentListener bracketListener = new IDocumentListener() {
+        @Override
+        public void documentAboutToBeChanged(DocumentEvent event) {
+        }
+
+        @Override
+        public void documentChanged(DocumentEvent event) {
+            Display display = Display.getCurrent();
+            if (display != null) {
+                display.timerExec(-1, bracketCheck);
+                display.timerExec(BRACKET_CHECK_DELAY, bracketCheck);
+            }
+        }
+    };
+
+    private IDocument checkedDocument;
+
+    /** Preferences of the bracket highlighting, before the ones of the text editors */
+    private static final String MATCHING_BRACKETS = "org.orbisgis.groovyeditor.matchingBrackets";
+    private static final String MATCHING_BRACKETS_COLOR = "org.orbisgis.groovyeditor.matchingBracketsColor";
+    private static final String BRACKET_AT_CARET = "org.orbisgis.groovyeditor.highlightBracketAtCaret";
+    private static final String ENCLOSING_BRACKETS = "org.orbisgis.groovyeditor.enclosingBrackets";
+
     private GroovyJob job;
+
+    /** Groovy context of this editor, kept between the executions */
+    private final GroovySession session = new GroovySession();
 
     public GroovyEditor(){
         super();
         setKeyBindingScopes(new String[]{"org.orbisgis.ui.editors.groovy"});
-        setSourceViewerConfiguration(new GroovySourceViewerConfiguration());
+        // The documents get the Groovy partitioner (comments, strings) used by the coloring and the completion
+        setDocumentProvider(new ForwardingDocumentProvider(GroovyPartitions.PARTITIONING,
+                GroovyPartitions::setup, new TextFileDocumentProvider()));
+        setSourceViewerConfiguration(new GroovySourceViewerConfiguration(this));
+    }
+
+    /**
+     * @return the Groovy context of this editor
+     */
+    public GroovySession getSession() {
+        return session;
     }
 
     /**
@@ -221,6 +313,95 @@ public class GroovyEditor extends AbstractDecoratedTextEditor implements ISaveab
         return viewer;
     }
 
+    /**
+     * Register the content assist action, so Ctrl+Space opens the completion.
+     */
+    @Override
+    protected void createActions() {
+        super.createActions();
+        ResourceBundle noResources = new ListResourceBundle() {
+            @Override
+            protected Object[][] getContents() {
+                return new Object[0][];
+            }
+        };
+        IAction action = new TextOperationAction(noResources, "ContentAssistProposal.", this,
+                ISourceViewer.CONTENTASSIST_PROPOSALS);
+        action.setText("Content Assist");
+        action.setActionDefinitionId(ITextEditorActionDefinitionIds.CONTENT_ASSIST_PROPOSALS);
+        setAction(CONTENT_ASSIST_ACTION, action);
+        markAsStateDependentAction(CONTENT_ASSIST_ACTION, true);
+
+        IAction format = new Action("Format") {
+            @Override
+            public void run() {
+                format();
+            }
+        };
+        format.setToolTipText("Indent the selected lines, or the whole script");
+        format.setActionDefinitionId(FORMAT_COMMAND);
+        setAction(FORMAT_ACTION, format);
+        markAsStateDependentAction(FORMAT_ACTION, true);
+    }
+
+    @Override
+    protected void editorContextMenuAboutToShow(IMenuManager menu) {
+        super.editorContextMenuAboutToShow(menu);
+        addAction(menu, ITextEditorActionConstants.GROUP_EDIT, FORMAT_ACTION);
+    }
+
+    /**
+     * Indent the selected lines, or the whole script when nothing is selected. Only the blanks change.
+     */
+    public void format() {
+        ISourceViewer viewer = getSourceViewer();
+        if (viewer == null || !isEditable()) {
+            return;
+        }
+        IDocument document = viewer.getDocument();
+        ITextSelection selection = (ITextSelection) getSelectionProvider().getSelection();
+        try {
+            int firstLine = 0;
+            int lastLine = document.getNumberOfLines() - 1;
+            if (selection.getLength() > 0) {
+                firstLine = selection.getStartLine();
+                lastLine = selection.getEndLine();
+                // A selection ending at the start of a line does not include this line
+                if (lastLine > firstLine && document.getLineOffset(lastLine) == selection.getOffset() + selection.getLength()) {
+                    lastLine--;
+                }
+            }
+            GroovyFormatter.Result result = ((GroovySourceViewerConfiguration) getSourceViewerConfiguration())
+                    .createFormatter().format(document, firstLine, lastLine);
+            int start = document.getLineOffset(firstLine);
+            int end = document.getLineOffset(lastLine) + document.getLineLength(lastLine);
+            if (result.text().equals(document.get(start, end - start))) {
+                return;
+            }
+            // The caret stays on its line, at the same place in the text of the line
+            int caretLine = document.getLineOfOffset(selection.getOffset());
+            IRegion caretRegion = document.getLineInformation(caretLine);
+            String caretLineText = document.get(caretRegion.getOffset(), caretRegion.getLength());
+            int indent = caretLineText.length() - caretLineText.stripLeading().length();
+            int inText = Math.max(0, selection.getOffset() - caretRegion.getOffset() - indent);
+
+            document.replace(start, end - start, result.text());
+
+            if (selection.getLength() > 0) {
+                int newEnd = start + result.text().length();
+                selectAndReveal(start, newEnd - start);
+            } else if (caretLine >= firstLine && caretLine <= lastLine) {
+                int newLine = firstLine + result.lineMap()[caretLine - firstLine];
+                IRegion region = document.getLineInformation(Math.min(newLine, document.getNumberOfLines() - 1));
+                String text = document.get(region.getOffset(), region.getLength());
+                int newIndent = text.length() - text.stripLeading().length();
+                selectAndReveal(region.getOffset() + Math.min(newIndent + inText, text.length()), 0);
+            }
+        } catch (BadLocationException e) {
+            LOGGER.error("Unable to format the script.", e);
+        }
+    }
+
     @Override
     public int promptToSaveOnClose() {
         return ISaveablePart2.YES;
@@ -241,6 +422,66 @@ public class GroovyEditor extends AbstractDecoratedTextEditor implements ISaveab
         GroovyEditorControl editorControl = new GroovyEditorControl(groovyEditor, this);
         super.createPartControl(editorControl);
         editorControl.setLayoutData(new GridData(GridData.FILL_BOTH));
+
+        checkedDocument = getDocument();
+        if (checkedDocument != null) {
+            checkedDocument.addDocumentListener(bracketListener);
+            checkBrackets();
+        }
+    }
+
+    @Override
+    protected void initializeEditor() {
+        super.initializeEditor();
+        // The bracket highlighting has its own settings; the other ones are those of the text editors
+        setPreferenceStore(new ChainedPreferenceStore(new IPreferenceStore[]{bracketPreferences(),
+                EditorsUI.getPreferenceStore()}));
+    }
+
+    private static IPreferenceStore bracketPreferences() {
+        PreferenceStore store = new PreferenceStore();
+        store.setDefault(MATCHING_BRACKETS, true);
+        store.setDefault(BRACKET_AT_CARET, true);
+        store.setDefault(ENCLOSING_BRACKETS, false);
+        boolean dark;
+        try {
+            dark = UIStyles.isDarkTheme();
+        } catch (RuntimeException | LinkageError e) {
+            dark = false;
+        }
+        PreferenceConverter.setDefault(store, MATCHING_BRACKETS_COLOR, dark ? new RGB(150, 150, 150) : new RGB(128, 128, 128));
+        return store;
+    }
+
+    /**
+     * The bracket matching the one at the cursor is boxed. The brackets of the strings and of the comments are
+     * ignored (Groovy partitioning).
+     */
+    @Override
+    protected void configureSourceViewerDecorationSupport(SourceViewerDecorationSupport support) {
+        support.setCharacterPairMatcher(new DefaultCharacterPairMatcher(
+                new char[]{'(', ')', '[', ']', '{', '}'}, GroovyPartitions.PARTITIONING, true));
+        support.setMatchingCharacterPainterPreferenceKeys(MATCHING_BRACKETS, MATCHING_BRACKETS_COLOR,
+                BRACKET_AT_CARET, ENCLOSING_BRACKETS);
+        super.configureSourceViewerDecorationSupport(support);
+    }
+
+    /**
+     * Mark the brackets without a matching one (a missing or extra bracket).
+     */
+    private void checkBrackets() {
+        IAnnotationModel model = getAnnotationModel();
+        IDocument document = getDocument();
+        if (model == null || document == null || getSourceViewer() == null) {
+            return;
+        }
+        bracketAnnotations.forEach(model::removeAnnotation);
+        bracketAnnotations.clear();
+        for (BracketChecker.Problem problem : BracketChecker.check(document)) {
+            Annotation annotation = new Annotation(ERROR_ANNOTATION_TYPE, false, problem.message());
+            model.addAnnotation(annotation, new Position(problem.offset(), 1));
+            bracketAnnotations.add(annotation);
+        }
     }
 
     private void createControlsBar(Composite editorPanel) {
@@ -260,10 +501,9 @@ public class GroovyEditor extends AbstractDecoratedTextEditor implements ISaveab
         VerticalButton.create(sideToolBar, SWT.LEFT | SWT.PUSH, getSite(), GroovyEditorCommands.CMD_EXECUTE_SELECTION, false);
         VerticalButton.create(sideToolBar, SWT.LEFT | SWT.PUSH, getSite(), GroovyEditorCommands.CMD_EXECUTE_SCRIPT, false);
         VerticalButton.create(sideToolBar, SWT.LEFT | SWT.PUSH, getSite(), GroovyEditorCommands.CMD_CLEAR, false);
+        VerticalButton.create(sideToolBar, SWT.LEFT | SWT.PUSH, getSite(), GroovyEditorCommands.CMD_RESET_CONTEXT, false);
         UIUtils.createEmptyLabel(sideToolBar, 1, 1).setLayoutData(new GridData(GridData.FILL_VERTICAL));
         VerticalButton.create(sideToolBar, SWT.LEFT | SWT.PUSH, getSite(), GroovyEditorCommands.CMD_LIST_CLASSPATHS, false);
-        VerticalButton.create(sideToolBar, SWT.LEFT | SWT.PUSH, getSite(), GroovyEditorCommands.CMD_ADD_DIR_TO_CLASSPATH, false);
-        VerticalButton.create(sideToolBar, SWT.LEFT | SWT.PUSH, getSite(), GroovyEditorCommands.CMD_ADD_JAR_TO_CLASSPATH, false);
 
         GridLayout layout = (GridLayout)sideToolBar.getLayout();
         layout.marginTop = SIDE_TOOLBAR_MARGIN_TOP;
@@ -288,33 +528,184 @@ public class GroovyEditor extends AbstractDecoratedTextEditor implements ISaveab
         }
     }
 
+    /**
+     * Execute the whole script.
+     */
     public void execute(){
-        this.doSave(new NullProgressMonitor());
         IDocument document = getDocument();
         if(document != null){
-            job = new GroovyJob(getPartName(), document.get());
-            job.schedule();
+            runScript(document.get(), 0, 0);
         }
     }
 
+    /**
+     * Execute the selected text, or the current line if nothing is selected.
+     */
     public void executeSelection() {
-        this.doSave(new NullProgressMonitor());
         IDocument document = getDocument();
-        if(document != null){
-            ITextSelection selection = (ITextSelection) getSelectionProvider().getSelection();
-            if (!selection.getText().isEmpty()) {
-                job = new GroovyJob(getPartName(), selection.getText());
-                job.schedule();
+        if(document == null){
+            return;
+        }
+        ITextSelection selection = (ITextSelection) getSelectionProvider().getSelection();
+        String text = selection.getText();
+        int start = selection.getOffset();
+        try {
+            if (text == null || text.isEmpty()) {
+                IRegion line = document.getLineInformationOfOffset(selection.getOffset());
+                text = document.get(line.getOffset(), line.getLength());
+                start = line.getOffset();
+            }
+            if (!text.isBlank()) {
+                int firstLine = document.getLineOfOffset(start);
+                runScript(text, firstLine, start - document.getLineOffset(firstLine));
+            }
+        } catch (BadLocationException e) {
+            LOGGER.warn("Unable to get the text to execute.", e);
+        }
+    }
+
+    /**
+     * @param script      the text to execute
+     * @param firstLine   line of the document where the text starts (from 0), to locate the errors
+     * @param firstColumn column of the document where the text starts (from 0)
+     */
+    private void runScript(String script, int firstLine, int firstColumn) {
+        this.doSave(new NullProgressMonitor());
+        clearErrors();
+        GroovyOutputConsole.show();
+        if (session.isRunning()) {
+            GroovyConsoleContent.appendLine("A script is already running in " + getScriptName()
+                    + ": stop it before running another one.", Style.ERROR);
+            return;
+        }
+        job = new GroovyJob(session, getScriptName(), script);
+        job.setErrorListener(errors -> Display.getDefault().asyncExec(() -> markErrors(errors, firstLine, firstColumn)));
+        job.schedule();
+    }
+
+    /**
+     * Underline the errors of the last execution in the editor and show the first one.
+     */
+    private void markErrors(List<ScriptError> errors, int firstLine, int firstColumn) {
+        IDocument document = getDocument();
+        IAnnotationModel model = getAnnotationModel();
+        if (document == null || model == null) {
+            return;
+        }
+        clearErrors();
+        Position first = null;
+        for (ScriptError error : errors) {
+            try {
+                int line = firstLine + error.line() - 1;
+                if (line < 0 || line >= document.getNumberOfLines()) {
+                    continue;
+                }
+                IRegion lineRegion = document.getLineInformation(line);
+                int offset;
+                int length;
+                if (error.column() > 0) {
+                    // Syntax error: from its column (the first line of a selection may not start at column 0)
+                    int column = error.column() - 1 + (error.line() == 1 ? firstColumn : 0);
+                    offset = lineRegion.getOffset() + Math.min(column, lineRegion.getLength());
+                    int end = error.endLine() == error.line() && error.endColumn() > error.column()
+                            ? offset + error.endColumn() - error.column()
+                            : lineRegion.getOffset() + lineRegion.getLength();
+                    length = Math.max(1, Math.min(end, lineRegion.getOffset() + lineRegion.getLength()) - offset);
+                } else {
+                    // Runtime error: the whole line, without its indentation
+                    String text = document.get(lineRegion.getOffset(), lineRegion.getLength());
+                    int indent = text.length() - text.stripLeading().length();
+                    offset = lineRegion.getOffset() + indent;
+                    length = text.strip().length();
+                }
+                Position position = new Position(offset, length);
+                if (isBracketMarked(model, offset)) {
+                    first = first == null ? position : first;
+                    continue;
+                }
+                Annotation annotation = new Annotation(ERROR_ANNOTATION_TYPE, false, error.message());
+                model.addAnnotation(annotation, position);
+                errorAnnotations.add(annotation);
+                if (first == null) {
+                    first = position;
+                }
+            } catch (BadLocationException e) {
+                LOGGER.trace("Error outside of the document", e);
             }
         }
+        if (first != null && getSourceViewer() != null) {
+            getSourceViewer().revealRange(first.getOffset(), first.getLength());
+        }
     }
 
+    private boolean isBracketMarked(IAnnotationModel model, int offset) {
+        for (Annotation annotation : bracketAnnotations) {
+            Position position = model.getPosition(annotation);
+            if (position != null && position.getOffset() == offset) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Remove the errors of the last execution from the editor.
+     */
+    private void clearErrors() {
+        IAnnotationModel model = getAnnotationModel();
+        if (model != null) {
+            errorAnnotations.forEach(model::removeAnnotation);
+        }
+        errorAnnotations.clear();
+    }
+
+    private IAnnotationModel getAnnotationModel() {
+        return getDocumentProvider() == null ? null : getDocumentProvider().getAnnotationModel(getEditorInput());
+    }
+
+    private String getScriptName() {
+        return getEditorInput() != null ? getEditorInput().getName() : getPartName();
+    }
+
+    /**
+     * Stop the running script.
+     */
     public void stop(){
-        this.getRunningJob().cancel();
+        if (job != null) {
+            job.cancel();
+        }
+    }
+
+    /**
+     * Forget the variables, imports and libraries of the Groovy context.
+     */
+    public void resetContext() {
+        GroovyOutputConsole.show();
+        clearErrors();
+        if (session.reset()) {
+            GroovyConsoleContent.appendLine("\n--- " + getScriptName() + ": context reset (variables, imports and @Grab libraries).", Style.INFO);
+        } else {
+            GroovyConsoleContent.appendLine("The context of " + getScriptName()
+                    + " cannot be reset while a script is running.", Style.ERROR);
+        }
     }
 
     public GroovyJob getRunningJob() {
         return job;
+    }
+
+    @Override
+    public void dispose() {
+        if (checkedDocument != null) {
+            checkedDocument.removeDocumentListener(bracketListener);
+        }
+        Display display = Display.getCurrent();
+        if (display != null) {
+            display.timerExec(-1, bracketCheck);
+        }
+        stop();
+        session.close();
+        super.dispose();
     }
 
 }

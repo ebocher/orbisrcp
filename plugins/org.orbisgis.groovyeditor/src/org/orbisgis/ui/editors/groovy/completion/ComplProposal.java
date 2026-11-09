@@ -25,7 +25,6 @@ import org.eclipse.jface.text.contentassist.ICompletionProposalExtension4;
 import org.eclipse.jface.text.contentassist.ICompletionProposalExtension6;
 import org.eclipse.jface.text.contentassist.IContextInformation;
 import org.eclipse.jface.viewers.StyledString;
-import org.eclipse.lsp4j.CompletionItemKind;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.graphics.Image;
 import org.eclipse.swt.graphics.Point;
@@ -34,45 +33,73 @@ import org.eclipse.swt.widgets.Display;
 import org.orbisgis.core.logger.Logger;
 import org.orbisgis.ui.editors.groovy.ui.Icons;
 
+/**
+ * A completion proposal of the Groovy editor.
+ */
 public class ComplProposal implements ICompletionProposal,
-                                            ICompletionProposalExtension4,
-                                            ICompletionProposalExtension6 {
+                                      ICompletionProposalExtension4,
+                                      ICompletionProposalExtension6 {
 
-    private static final Logger LOGGER = new Logger(GroovyCompletionProcessor.class);
+    private static final Logger LOGGER = new Logger(ComplProposal.class);
 
-    private final int currPos;
-    private final int replaceOff;
+    /**
+     * Kind of the proposed element, sorted by relevance.
+     */
+    public enum Kind {
+        VARIABLE, PROPERTY, METHOD, CLASS, KEYWORD, WORD
+    }
+
+    private final int replaceOffset;
     private final int replaceLength;
-    private final String replaceStr;
-    private final int cursorPos;
+    private final String replacement;
+    private final int cursorPosition;
     private final String label;
-    private final CompletionItemKind kind;
-    private final String[] additionalInfo;
+    private final String qualifier;
+    private final Kind kind;
+    private final int prefixLength;
 
-    public ComplProposal(int currPos, int replaceOff, int replaceLength, String replaceStr, int cursorPos,
-                         String label, CompletionItemKind kind, String... additionalInfo){
-        this.currPos = currPos;
-        this.replaceOff = replaceOff;
+    /**
+     * @param replaceOffset  offset of the replaced text (the typed prefix)
+     * @param replaceLength  length of the replaced text
+     * @param replacement    inserted text
+     * @param cursorPosition position of the cursor after insertion, relative to replaceOffset
+     * @param label          displayed text
+     * @param qualifier      additional information displayed after the label (type...), may be null
+     * @param kind           kind of the element
+     * @param prefixLength   number of characters already typed, highlighted in the label
+     */
+    public ComplProposal(int replaceOffset, int replaceLength, String replacement, int cursorPosition,
+                         String label, String qualifier, Kind kind, int prefixLength) {
+        this.replaceOffset = replaceOffset;
         this.replaceLength = replaceLength;
-        this.replaceStr = replaceStr;
-        this.cursorPos = cursorPos;
+        this.replacement = replacement;
+        this.cursorPosition = cursorPosition;
         this.label = label;
+        this.qualifier = qualifier;
         this.kind = kind;
-        this.additionalInfo = additionalInfo;
+        this.prefixLength = prefixLength;
+    }
+
+    public Kind getKind() {
+        return kind;
+    }
+
+    public String getReplacement() {
+        return replacement;
     }
 
     @Override
     public void apply(IDocument document) {
         try {
-            document.replace(this.replaceOff, this.replaceLength, this.replaceStr);
+            document.replace(replaceOffset, replaceLength, replacement);
         } catch (BadLocationException e) {
             LOGGER.error("Bad location", e);
         }
     }
 
     @Override
-    public Point getSelection(IDocument iDocument) {
-        return new Point(this.replaceOff + this.cursorPos, 0);
+    public Point getSelection(IDocument document) {
+        return new Point(replaceOffset + cursorPosition, 0);
     }
 
     @Override
@@ -82,18 +109,20 @@ public class ComplProposal implements ICompletionProposal,
 
     @Override
     public String getDisplayString() {
-        return label;
+        return qualifier == null ? label : label + " " + qualifier;
     }
 
     @Override
     public Image getImage() {
-        switch(kind){
-            case Method:
+        switch (kind) {
+            case METHOD:
                 return Icons.COMPLETION_METHOD;
-            case Variable:
+            case VARIABLE:
+            case PROPERTY:
                 return Icons.COMPLETION_VARIABLE;
+            default:
+                return null;
         }
-        return null;
     }
 
     @Override
@@ -108,33 +137,26 @@ public class ComplProposal implements ICompletionProposal,
 
     @Override
     public StyledString getStyledDisplayString() {
-        return new StyledString()
-                .append(label.substring(0, currPos), new ColorStyler(SWT.COLOR_DARK_CYAN))
-                .append(label.substring(currPos))
-                .append(getQualifier(), StyledString.QUALIFIER_STYLER);
-    }
-
-    private String getQualifier(){
-        switch(kind){
-            case Method:
-                return " ("+ String.join(", ", additionalInfo) +")";
-            case Variable:
-                return " "+(additionalInfo.length>0?additionalInfo[0]:"");
+        int highlighted = Math.min(prefixLength, label.length());
+        StyledString styled = new StyledString()
+                .append(label.substring(0, highlighted), new ColorStyler(SWT.COLOR_DARK_CYAN))
+                .append(label.substring(highlighted));
+        if (qualifier != null) {
+            styled.append(" " + qualifier, StyledString.QUALIFIER_STYLER);
         }
-        return null;
+        return styled;
     }
 
     private static class ColorStyler extends StyledString.Styler {
+        private final int color;
 
-        int col;
-
-        public ColorStyler(int color){
-            this.col = color;
+        ColorStyler(int color) {
+            this.color = color;
         }
 
         @Override
         public void applyStyles(final TextStyle textStyle) {
-            textStyle.foreground = Display.getCurrent().getSystemColor(col);
+            textStyle.foreground = Display.getCurrent().getSystemColor(color);
         }
     }
 }

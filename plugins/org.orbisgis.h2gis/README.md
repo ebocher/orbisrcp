@@ -1,4 +1,13 @@
-Plugin to install the current development version of H2GIS.
+Plugin to install the current development version of H2GIS: its drivers ("H2GIS Embedded Snapshot", "H2GIS Server
+Snapshot") download the last snapshot build of the H2GIS series written in `plugin.xml` (`2.2.6-SNAPSHOT`) from the
+Maven Central snapshots repository. DBeaver has its own H2GIS drivers ("H2GIS Embedded", "H2GIS Server"), which follow
+the releases.
+
+DBeaver keeps the downloaded driver files: to get a newer snapshot build, open *Database > Driver Manager*, edit the
+driver and click *Download/Update* in the *Libraries* tab.
+
+When the development of a new H2GIS version starts (new version in the H2GIS `pom.xml`), change the version in
+`plugin.xml`.
 
 To install the last H2GIS snaptshot version : 
 

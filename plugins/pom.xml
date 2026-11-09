@@ -15,7 +15,6 @@
 	<packaging>pom</packaging>
 
 	<modules>
-		<module>dependencies</module>
 		<module>org.orbisgis.core</module>
 		<module>org.orbisgis.groovyeditor</module>
 		<module>org.orbisgis.h2gis</module>
