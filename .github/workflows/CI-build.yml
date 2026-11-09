@@ -40,10 +40,10 @@ jobs:
           cache: maven
 
       - name: Build and install DBeaver
-        run: mvn -B install -f dbeaver/product/aggregate/pom.xml -T1C -DskipTests
+        run: bash orbisrcp/.github/scripts/mvn-retry.sh install -f dbeaver/product/aggregate/pom.xml -T1C -DskipTests
 
       - name: Build OrbisRCP
-        run: mvn -B clean verify -f orbisrcp/pom.xml
+        run: bash orbisrcp/.github/scripts/mvn-retry.sh clean verify -f orbisrcp/pom.xml
 
       - name: Upload the p2 repository
         uses: actions/upload-artifact@v4
