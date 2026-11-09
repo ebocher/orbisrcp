@@ -10,6 +10,18 @@
 set -u
 
 ECLIPSE_MIRROR="${ECLIPSE_MIRROR:-https://ftp.fau.de/eclipse/releases}"
+
+# The Maven version of DBeaver (wrapper of dbeaver-common, Maven 3.9.16): the Maven of the runner fails on the
+# nested jars of some DBeaver bundles ("Invalid Collect Request" in org.jkiss.dbeaver.net.ssh.sshj)
+if [ -z "${MVN:-}" ]; then
+    if [ -f dbeaver-common/mvnw ]; then
+        MVN="$(pwd)/dbeaver-common/mvnw"
+        chmod +x "$MVN"
+    else
+        MVN=mvn
+    fi
+fi
+"$MVN" -v | head -1
 ATTEMPTS=3
 
 for attempt in $(seq 1 $ATTEMPTS); do
@@ -19,7 +31,7 @@ for attempt in $(seq 1 $ATTEMPTS); do
         extra=("-Declipse-repo-url=$ECLIPSE_MIRROR")
     fi
     log=$(mktemp)
-    mvn -B -Dtycho.p2.transport.min-cache-minutes=10080 "${extra[@]}" "$@" 2>&1 | tee "$log"
+    "$MVN" -B -Dtycho.p2.transport.min-cache-minutes=10080 "${extra[@]}" "$@" 2>&1 | tee "$log"
     status=${PIPESTATUS[0]}
     if [ "$status" -eq 0 ]; then
         exit 0
