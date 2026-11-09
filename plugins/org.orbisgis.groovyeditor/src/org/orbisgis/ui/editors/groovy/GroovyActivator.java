@@ -25,6 +25,7 @@ import org.orbisgis.ui.editors.groovy.dbeaver.ConnectionCatalog;
 import org.orbisgis.ui.editors.groovy.dbeaver.DBeaverFacade;
 import org.orbisgis.ui.editors.groovy.html.HtmlPages;
 import org.orbisgis.ui.editors.groovy.html.VegaLiteFunction;
+import org.orbisgis.ui.editors.groovy.shell.ShellFunction;
 import org.orbisgis.ui.editors.groovy.session.GrapeSupport;
 import org.orbisgis.ui.editors.groovy.session.SessionClassLoader;
 import org.orbisgis.ui.editors.groovy.session.GroovySession;
@@ -48,6 +49,12 @@ public class GroovyActivator extends AbstractUIPlugin {
             DBeaverFacade facade = new DBeaverFacade(htmlPages);
             binding.setVariable(DBeaverFacade.VARIABLE, facade);
             return facade;
+        });
+        // 'sh(...)': run a command (a Python script...), its output in the console; stopped with the script
+        GroovySession.addBindingContributor(binding -> {
+            ShellFunction shell = new ShellFunction(binding);
+            binding.setVariable(ShellFunction.NAME, shell);
+            return shell;
         });
         // Completion of the connection names: dbeaver.query("|
         ConnectionCompletion.configure(DBeaverFacade.class, ConnectionCatalog.CONNECTION_METHODS,

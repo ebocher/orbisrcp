@@ -251,6 +251,37 @@ other pages (demat pages...) open the same dialog.
 
 On Windows, the pages need the Edge browser engine (the default of DBeaver on Windows 10 and 11).
 
+### Running commands: `sh(...)`
+
+`sh(...)` runs a command (a Python script, a tool...): its output is shown in the console while it runs, the errors
+in red.
+
+```groovy
+sh "python3 analyse.py communes.csv"                    // the output in the console
+sh(["python3", "analyse.py", "my file.csv"])            // arguments as a list: no quoting problem
+def r = sh("python3 stats.py", quiet: true)             // r.text: the output, r.exitCode, r.error
+def stats = new groovy.json.JsonSlurper().parseText(r.text)
+sh("ls *.csv | wc -l", shell: true)                      // pipes, redirections, wildcards
+sh("python3 long.py", dir: "/data", env: [MODE: "fast"], timeout: 600)
+```
+
+| Option | |
+|---|---|
+| `dir` | working directory (the home directory by default) |
+| `env` | environment variables added to the ones of DBeaver |
+| `input` | text sent to the standard input |
+| `shell` | run with `bash -c` (`cmd /c` on Windows): pipes, redirections, wildcards |
+| `quiet` | do not show the output (it is in the result) |
+| `timeout` | maximum duration, in seconds |
+| `charset` | encoding of the output (UTF-8 by default) |
+
+- The result has `exitCode`, `text` (standard output), `error` (error output), `timedOut` and `success`.
+  A non-zero exit code is shown in the console; the script goes on.
+- The Python scripts show their output as they run (`PYTHONUNBUFFERED`), in UTF-8.
+- The **Stop** button stops the command and its sub-processes: they are asked to stop, and killed after 5 seconds
+  (immediately on Windows). The `timeout` and closing the console do the same. A command which detaches itself
+  (`nohup ... &`, a daemon) is not stopped.
+
 ### Libraries with @Grab
 
 Libraries published on Maven can be loaded with `@Grab`, for example [orbisdata](https://github.com/orbisgis/orbisdata):
