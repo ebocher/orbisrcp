@@ -20,6 +20,8 @@ package org.orbisgis.ui.editors.groovy;
 
 import org.eclipse.ui.plugin.AbstractUIPlugin;
 import org.orbisgis.core.CoreActivator;
+import org.orbisgis.ui.editors.groovy.completion.ConnectionCompletion;
+import org.orbisgis.ui.editors.groovy.dbeaver.ConnectionCatalog;
 import org.orbisgis.ui.editors.groovy.dbeaver.DBeaverFacade;
 import org.orbisgis.ui.editors.groovy.html.HtmlPages;
 import org.orbisgis.ui.editors.groovy.html.VegaLiteFunction;
@@ -47,6 +49,9 @@ public class GroovyActivator extends AbstractUIPlugin {
             binding.setVariable(DBeaverFacade.VARIABLE, facade);
             return facade;
         });
+        // Completion of the connection names: dbeaver.query("|
+        ConnectionCompletion.configure(DBeaverFacade.class, ConnectionCatalog.CONNECTION_METHODS,
+                ConnectionCatalog::connections);
         // 'vegalite(...)': Vega-Lite specifications, with their completion in the editor
         GroovySession.addBindingContributor(binding -> {
             binding.setVariable(VegaLiteFunction.NAME, new VegaLiteFunction());
