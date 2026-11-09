@@ -135,6 +135,11 @@ Every script has a `dbeaver` variable to use the connections and the navigator o
 its methods, and the completion (`dbeaver.`) shows them. A `datasource` is the name of a connection of the Database
 Navigator (or its id), a connection object or any database object of that connection.
 
+The completion proposes the names of the connections of the active project in the first argument of the methods
+taking a connection (`query`, `execute`, `connection`, `sql`, `datasource`, `connect`, `disconnect`,
+`connectionProperties`, `jdbcUrl`, `openSql`): `dbeaver.query("|` (`Ctrl+Space`), with their driver, and their URL
+in the description. Only the DBeaver configuration is read: no connection is opened.
+
 ```groovy
 println dbeaver.datasourceNames                       // connections of the active project
 
@@ -246,6 +251,37 @@ other pages (demat pages...) open the same dialog.
 
 On Windows, the pages need the Edge browser engine (the default of DBeaver on Windows 10 and 11).
 
+### Running commands: `sh(...)`
+
+`sh(...)` runs a command (a Python script, a tool...): its output is shown in the console while it runs, the errors
+in red.
+
+```groovy
+sh "python3 analyse.py communes.csv"                    // the output in the console
+sh(["python3", "analyse.py", "my file.csv"])            // arguments as a list: no quoting problem
+def r = sh("python3 stats.py", quiet: true)             // r.text: the output, r.exitCode, r.error
+def stats = new groovy.json.JsonSlurper().parseText(r.text)
+sh("ls *.csv | wc -l", shell: true)                      // pipes, redirections, wildcards
+sh("python3 long.py", dir: "/data", env: [MODE: "fast"], timeout: 600)
+```
+
+| Option | |
+|---|---|
+| `dir` | working directory (the home directory by default) |
+| `env` | environment variables added to the ones of DBeaver |
+| `input` | text sent to the standard input |
+| `shell` | run with `bash -c` (`cmd /c` on Windows): pipes, redirections, wildcards |
+| `quiet` | do not show the output (it is in the result) |
+| `timeout` | maximum duration, in seconds |
+| `charset` | encoding of the output (UTF-8 by default) |
+
+- The result has `exitCode`, `text` (standard output), `error` (error output), `timedOut` and `success`.
+  A non-zero exit code is shown in the console; the script goes on.
+- The Python scripts show their output as they run (`PYTHONUNBUFFERED`), in UTF-8.
+- The **Stop** button stops the command and its sub-processes: they are asked to stop, and killed after 5 seconds
+  (immediately on Windows). The `timeout` and closing the console do the same. A command which detaches itself
+  (`nohup ... &`, a daemon) is not stopped.
+
 ### Libraries with @Grab
 
 Libraries published on Maven can be loaded with `@Grab`, for example [orbisdata](https://github.com/orbisgis/orbisdata):
@@ -258,30 +294,6 @@ h2gis = H2GIS.open('/tmp/myh2gis_db')
 h2gis.execute("DROP TABLE IF EXISTS pts; CREATE TABLE pts AS SELECT 'POINT(1 2)'::GEOMETRY AS the_geom")
 h2gis.getSpatialTable("pts").each { println it.the_geom.buffer(10).area }
 ```
-
-- The resolution and the downloads are shown in the output view. The libraries are cached in `~/.groovy/grapes`.
-- The library stays loaded, and its imports remembered, in the next executions of the same editor
-  (until the context is reset).
-- The Groovy modules embedded in the console are never downloaded: the libraries use the Groovy of the console.
-  Groovy 2 and 3 modules (`org.codehaus.groovy`) are excluded, since they cannot work with Groovy 4.
-- JTS comes from DBeaver (version 1.20): the geometries of a library and those of DBeaver are the same objects.
-- Repositories: the local Maven repository (`~/.m2/repository`), Maven Central and the Maven Central snapshots
-  (`-SNAPSHOT` versions). Add another one with `@GrabResolver(name='my-repo', root='https://...')`, or use your own
-  Ivy configuration in `~/.groovy/grapeConfig.xml`.
-- The proxy settings of DBeaver (`Preferences` > `Network Connections`) are used.
-- Local builds: after `mvn install` of a library, grab its `-SNAPSHOT` version. When the jar of `~/.m2` is newer than
-  the one cached by Grape, the new build is used (reset the context first if the library is already loaded: the
-  console says so). A context loads copies of its jars, so a jar rebuilt or updated on disk does not disturb it.
-  A `-SNAPSHOT` downloaded from a remote repository is not updated automatically: delete its folder in
-  `~/.groovy/grapes` to get a newer one.
-- When a script fails, the line of the error is underlined in red in the editor (from its column for a syntax
-  error), with a marker in the margin; hover it to read the error. The marks are removed at the next execution.
-- The **Classpath** button lists the libraries of the console: the `@Grab` libraries with their dependencies,
-  group and version, and the jars or folders added by hand (for a jar not published on Maven). `Copy list` copies
-  it, for instance to report a version conflict.
-- When the Grape cache is incomplete (a jar missing, a library first found in `~/.m2` and removed since...), the
-  console removes the cache entry and resolves the library again from the repositories.
-
 
 
 

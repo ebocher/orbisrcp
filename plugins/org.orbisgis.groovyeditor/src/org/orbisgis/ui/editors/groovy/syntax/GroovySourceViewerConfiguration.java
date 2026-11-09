@@ -41,6 +41,8 @@ import org.eclipse.ui.editors.text.TextSourceViewerConfiguration;
 import org.jkiss.dbeaver.ui.UIStyles;
 import org.orbisgis.ui.editors.groovy.GroovyEditor;
 import org.orbisgis.ui.editors.groovy.completion.GroovyCompletionProcessor;
+import org.orbisgis.ui.editors.groovy.completion.ConnectionCompletion;
+import org.orbisgis.ui.editors.groovy.completion.ConnectionCompletionProcessor;
 import org.orbisgis.ui.editors.groovy.completion.GroovyTemplateProcessor;
 import org.orbisgis.ui.editors.groovy.completion.vegalite.VegaLiteCompletionProcessor;
 
@@ -109,12 +111,15 @@ public class GroovySourceViewerConfiguration extends TextSourceViewerConfigurati
         assistant.setDocumentPartitioning(getConfiguredDocumentPartitioning(sourceViewer));
         VegaLiteCompletionProcessor vegaLite = new VegaLiteCompletionProcessor();
         GroovyCompletionProcessor groovy = new GroovyCompletionProcessor(editor::getSession);
+        ConnectionCompletionProcessor connections = new ConnectionCompletionProcessor(editor::getSession);
         assistant.setContentAssistProcessor(new CompositeProcessor(
-                new GroovyTemplateProcessor(groovy::receiverType), groovy, vegaLite),
+                new GroovyTemplateProcessor(groovy::receiverType), groovy, vegaLite, connections),
                 IDocument.DEFAULT_CONTENT_TYPE);
-        // In the strings, only the values of the Vega-Lite specifications: vegalite(mark: "ba|")
-        assistant.setContentAssistProcessor(vegaLite, GroovyPartitions.STRING);
-        assistant.setContentAssistProcessor(vegaLite, GroovyPartitions.GSTRING);
+        // In the strings: the names of the connections (dbeaver.query("|) and the values of the Vega-Lite
+        // specifications (vegalite(mark: "ba|"))
+        StringProcessor strings = new StringProcessor(vegaLite, connections);
+        assistant.setContentAssistProcessor(strings, GroovyPartitions.STRING);
+        assistant.setContentAssistProcessor(strings, GroovyPartitions.GSTRING);
         assistant.setInformationControlCreator(getInformationControlCreator(sourceViewer));
         assistant.enableAutoInsert(true);
         assistant.enableAutoActivation(true);
@@ -152,16 +157,65 @@ public class GroovySourceViewerConfiguration extends TextSourceViewerConfigurati
     /**
      * Merges the proposals of several processors.
      */
+    /**
+     * Content assist in the strings: the names of the connections, the values of the Vega-Lite specifications.
+     */
+    private static final class StringProcessor implements IContentAssistProcessor {
+        private final VegaLiteCompletionProcessor vegaLite;
+        private final ConnectionCompletionProcessor connections;
+
+        StringProcessor(VegaLiteCompletionProcessor vegaLite, ConnectionCompletionProcessor connections) {
+            this.vegaLite = vegaLite;
+            this.connections = connections;
+        }
+
+        @Override
+        public ICompletionProposal[] computeCompletionProposals(ITextViewer viewer, int offset) {
+            ConnectionCompletion.Result connection = connections.result(viewer, offset);
+            if (connection != null) {
+                return ConnectionCompletionProcessor.proposals(connection);
+            }
+            return vegaLite.computeCompletionProposals(viewer, offset);
+        }
+
+        @Override
+        public IContextInformation[] computeContextInformation(ITextViewer viewer, int offset) {
+            return null;
+        }
+
+        @Override
+        public char[] getCompletionProposalAutoActivationCharacters() {
+            return null;
+        }
+
+        @Override
+        public char[] getContextInformationAutoActivationCharacters() {
+            return null;
+        }
+
+        @Override
+        public String getErrorMessage() {
+            return null;
+        }
+
+        @Override
+        public IContextInformationValidator getContextInformationValidator() {
+            return null;
+        }
+    }
+
     private static final class CompositeProcessor implements IContentAssistProcessor {
         private final GroovyTemplateProcessor templates;
         private final GroovyCompletionProcessor completion;
         private final VegaLiteCompletionProcessor vegaLite;
+        private final ConnectionCompletionProcessor connections;
 
         CompositeProcessor(GroovyTemplateProcessor templates, GroovyCompletionProcessor completion,
-                           VegaLiteCompletionProcessor vegaLite) {
+                           VegaLiteCompletionProcessor vegaLite, ConnectionCompletionProcessor connections) {
             this.templates = templates;
             this.completion = completion;
             this.vegaLite = vegaLite;
+            this.connections = connections;
         }
 
         @Override
@@ -171,7 +225,16 @@ public class GroovySourceViewerConfiguration extends TextSourceViewerConfigurati
             if (specification != null) {
                 return specification;
             }
-            List<ICompletionProposal> proposals = new ArrayList<>(templates.computeTemplateProposals(viewer, offset));
+            List<ICompletionProposal> proposals = new ArrayList<>();
+            // dbeaver.query(|: the connections first, then the variables...
+            ConnectionCompletion.Result connection = connections.result(viewer, offset);
+            if (connection != null) {
+                proposals.addAll(Arrays.asList(ConnectionCompletionProcessor.proposals(connection)));
+                if (connection.inString()) {
+                    return proposals.toArray(new ICompletionProposal[0]);
+                }
+            }
+            proposals.addAll(templates.computeTemplateProposals(viewer, offset));
             proposals.addAll(Arrays.asList(completion.computeCompletionProposals(viewer, offset)));
             return proposals.toArray(new ICompletionProposal[0]);
         }
