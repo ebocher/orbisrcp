@@ -7,36 +7,37 @@ jobs:
     runs-on: ubuntu-latest
     steps:
 
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 21
-          cache: maven
-
       # DBeaver and its dependencies must be cloned side by side (see dbeaver/AGENTS.md)
       - name: Checkout DBeaver common
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: dbeaver/dbeaver-common
           path: dbeaver-common
 
       - name: Checkout Datadam API
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: dbeaver/datadam-api
           path: datadam-api
 
       - name: Checkout DBeaver
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: dbeaver/dbeaver
           path: dbeaver
 
       - name: Checkout OrbisRCP
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           path: orbisrcp
+
+      # After the checkouts: the Maven cache key is computed from the pom.xml files
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: maven
 
       - name: Build and install DBeaver
         run: mvn -B install -f dbeaver/product/aggregate/pom.xml -T1C -DskipTests
