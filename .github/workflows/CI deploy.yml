@@ -9,6 +9,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Push to the p2-repository branch (served by GitHub Pages: https://orbisgis.github.io/orbisrcp/)
+    permissions:
+      contents: write
     steps:
 
       - name: Set up JDK 21
@@ -61,9 +64,16 @@ jobs:
           git config user.email "info@orbisgis.org"
           git config user.name OrbisGIS
 
+      # The new build replaces the previous one: the old plugins would stay in the branch forever, unused
+      # (the p2 metadata only lists the new build)
       - name: Update the p2 repository
         working-directory: p2-repository
-        run: unzip -o -qq ../orbisrcp/p2/target/p2-1.0.0-SNAPSHOT.zip -d ./
+        run: |
+          git rm -rq --ignore-unmatch features plugins artifacts.jar content.jar artifacts.xml.xz content.xml.xz \
+            p2.index index.html web
+          unzip -o -qq ../orbisrcp/p2/target/p2-1.0.0-SNAPSHOT.zip -d ./
+          sed -e "s/@DATE@/$(date -u '+%Y-%m-%d %H:%M UTC')/" -e "s/@COMMIT@/${GITHUB_SHA::7}/" \
+            ../orbisrcp/p2/siteTemplate/index.html > index.html
 
       - name: Push P2 branch
         working-directory: p2-repository
