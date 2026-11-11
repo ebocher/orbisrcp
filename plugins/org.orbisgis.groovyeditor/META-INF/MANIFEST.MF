@@ -1,9 +1,10 @@
 Manifest-Version: 1.0
 Bundle-ManifestVersion: 2
-Bundle-Name: Groovy editor
+Bundle-Name: %Bundle-Name
 Bundle-SymbolicName: org.orbisgis.groovyeditor;singleton:=true
 Bundle-Version: 1.0.0.qualifier
-Bundle-Vendor: OrbisGIS
+Bundle-Vendor: %Bundle-Vendor
+Bundle-Localization: OSGI-INF/l10n/bundle
 Automatic-Module-Name: org.orbisgis.groovyeditor
 Bundle-RequiredExecutionEnvironment: JavaSE-21
 Require-Bundle: org.eclipse.core.runtime,

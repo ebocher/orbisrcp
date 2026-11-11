@@ -20,6 +20,8 @@
  */
 package org.orbisgis.h2gis.ui;
 
+import org.eclipse.osgi.util.NLS;
+import org.orbisgis.h2gis.internal.H2GISMessages;
 import org.eclipse.core.runtime.IStatus;
 import org.eclipse.core.runtime.Status;
 import org.jkiss.dbeaver.model.DBPDataSource;
@@ -45,7 +47,7 @@ public class ImportFilesJob extends AbstractJob {
     private final List<FileImport> imports;
 
     public ImportFilesJob(ImportTarget target, List<FileImport> imports) {
-        super("Import files in " + target.describe());
+        super(NLS.bind(H2GISMessages.import_job, target.describe()));
         this.target = target;
         this.imports = imports;
         setUser(true);
@@ -55,16 +57,16 @@ public class ImportFilesJob extends AbstractJob {
     protected IStatus run(DBRProgressMonitor monitor) {
         List<FileImport.Result> results = new ArrayList<>();
         String failure = null;
-        monitor.beginTask("Import files", imports.size());
+        monitor.beginTask(H2GISMessages.import_task, imports.size());
         try {
             DBPDataSourceContainer container = target.container();
             if (!container.isConnected()) {
-                monitor.subTask("Connect to " + container.getName());
+                monitor.subTask(NLS.bind(H2GISMessages.job_connect, container.getName()));
                 container.connect(monitor, true, true);
             }
             DBPDataSource dataSource = container.getDataSource();
             if (dataSource == null) {
-                throw new IllegalStateException("Unable to connect to " + container.getName());
+                throw new IllegalStateException(NLS.bind(H2GISMessages.job_connect_error, container.getName()));
             }
             try (JDBCSession session = DBUtils.openUtilSession(monitor, dataSource, "Import files")) {
                 for (FileImport fileImport : imports) {
@@ -92,6 +94,15 @@ public class ImportFilesJob extends AbstractJob {
     }
 
     private void showSummary(List<FileImport.Result> results, String failure) {
-        new ImportResultDialog(UIUtils.getActiveWorkbenchShell(), target, results, failure).open();
+        List<ResultDialog.Row> rows = new ArrayList<>();
+        for (FileImport.Result result : results) {
+            boolean several = result.isSuccess() && result.rows() < 0;
+            rows.add(new ResultDialog.Row(result.file().getName(), result.table() + (several ? "_*" : ""),
+                    result.rows(), result.error(), result.file().getAbsolutePath() + (several
+                    ? "\n" + NLS.bind(H2GISMessages.import_details_several, result.table()) : "")));
+        }
+        new ResultDialog(UIUtils.getActiveWorkbenchShell(), NLS.bind(H2GISMessages.import_summary_title, target.describe()),
+                H2GISMessages.import_summary_verb, H2GISMessages.result_imported,
+                new String[]{H2GISMessages.import_column_file, H2GISMessages.import_column_table}, rows, failure).open();
     }
 }

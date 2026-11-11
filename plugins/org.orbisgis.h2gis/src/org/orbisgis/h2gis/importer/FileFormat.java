@@ -20,6 +20,8 @@
  */
 package org.orbisgis.h2gis.importer;
 
+import org.orbisgis.h2gis.internal.H2GISMessages;
+
 import java.text.Normalizer;
 import java.util.List;
 import java.util.Locale;
@@ -151,9 +153,9 @@ public enum FileFormat {
             patterns[i] = pattern.toString();
             i++;
         }
-        names[0] = "Files H2GIS can import";
+        names[0] = H2GISMessages.import_filter_supported;
         patterns[0] = all.toString();
-        names[i] = "All files";
+        names[i] = H2GISMessages.import_filter_all;
         patterns[i] = "*";
         return new String[][]{names, patterns};
     }

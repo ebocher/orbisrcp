@@ -18,6 +18,7 @@
  */
 package org.orbisgis.ui.editors.groovy;
 
+import org.orbisgis.ui.editors.groovy.internal.GroovyMessages;
 import org.eclipse.jface.action.Action;
 import org.eclipse.jface.action.IAction;
 import org.eclipse.jface.action.MenuManager;
@@ -78,7 +79,7 @@ public class GroovyOutputConsole extends ViewPart {
 	private void createContextMenu(StyledText control) {
 		ISharedImages images = PlatformUI.getWorkbench().getSharedImages();
 
-		IAction copyAction = new Action("Copy") {
+		IAction copyAction = new Action(GroovyMessages.output_copy) {
 			@Override
 			public void run() {
 				if (control.getSelectionCount() > 0) {
@@ -100,7 +101,7 @@ public class GroovyOutputConsole extends ViewPart {
 		copyAction.setActionDefinitionId(IWorkbenchCommandConstants.EDIT_COPY);
 		copyAction.setImageDescriptor(images.getImageDescriptor(ISharedImages.IMG_TOOL_COPY));
 
-		IAction selectAllAction = new Action("Select All") {
+		IAction selectAllAction = new Action(GroovyMessages.output_select_all) {
 			@Override
 			public void run() {
 				control.selectAll();
@@ -116,7 +117,7 @@ public class GroovyOutputConsole extends ViewPart {
 		final MenuManager menuMgr = new MenuManager();
 		menuMgr.setRemoveAllWhenShown(true);
 		menuMgr.addMenuListener(manager -> {
-			copyAction.setText(control.getSelectionCount() > 0 ? "Copy" : "Copy All");
+			copyAction.setText(control.getSelectionCount() > 0 ? GroovyMessages.output_copy : GroovyMessages.output_copy_all);
 			copyAction.setEnabled(control.getCharCount() > 0);
 			selectAllAction.setEnabled(control.getCharCount() > 0);
 			manager.add(copyAction);

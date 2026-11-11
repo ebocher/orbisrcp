@@ -20,6 +20,8 @@
  */
 package org.orbisgis.h2gis.ui;
 
+import org.eclipse.osgi.util.NLS;
+import org.orbisgis.h2gis.internal.H2GISMessages;
 import org.eclipse.jface.dialogs.IDialogConstants;
 import org.eclipse.jface.dialogs.TitleAreaDialog;
 import org.eclipse.swt.SWT;
@@ -63,14 +65,14 @@ public class ImportFilesDialog extends TitleAreaDialog {
     @Override
     protected void configureShell(Shell shell) {
         super.configureShell(shell);
-        shell.setText("Import files");
+        shell.setText(H2GISMessages.import_shell);
     }
 
     @Override
     protected Control createDialogArea(Composite parent) {
         Composite area = (Composite) super.createDialogArea(parent);
-        setTitle("Import files in H2GIS");
-        setMessage("In " + target.describe() + ". Each file is read by its H2GIS function into a table.");
+        setTitle(H2GISMessages.import_title);
+        setMessage(NLS.bind(H2GISMessages.import_message, target.describe()));
 
         ScrolledComposite scrolled = new ScrolledComposite(area, SWT.V_SCROLL | SWT.H_SCROLL);
         GridData scrolledData = new GridData(SWT.FILL, SWT.FILL, true, true);
@@ -82,9 +84,9 @@ public class ImportFilesDialog extends TitleAreaDialog {
 
         Composite grid = new Composite(scrolled, SWT.NONE);
         grid.setLayout(new GridLayout(3, false));
-        header(grid, "File");
-        header(grid, "Format");
-        header(grid, "Table");
+        header(grid, H2GISMessages.import_column_file);
+        header(grid, H2GISMessages.import_column_format);
+        header(grid, H2GISMessages.import_column_table);
         for (File file : files) {
             FileFormat format = FileFormat.of(file.getName());
             Label name = new Label(grid, SWT.NONE);
@@ -92,8 +94,8 @@ public class ImportFilesDialog extends TitleAreaDialog {
             name.setToolTipText(file.getAbsolutePath());
             name.setLayoutData(new GridData(SWT.FILL, SWT.CENTER, true, false));
             Label formatLabel = new Label(grid, SWT.NONE);
-            formatLabel.setText(format == null ? "Not supported" : format.getLabel()
-                    + (format.isMultipleTables() ? " (several tables)" : ""));
+            formatLabel.setText(format == null ? H2GISMessages.import_format_unsupported : format.isMultipleTables()
+                    ? NLS.bind(H2GISMessages.import_format_several, format.getLabel()) : format.getLabel());
             Text table = new Text(grid, SWT.BORDER);
             GridData tableData = new GridData(SWT.FILL, SWT.CENTER, true, false);
             tableData.widthHint = 200;
@@ -103,7 +105,7 @@ public class ImportFilesDialog extends TitleAreaDialog {
             } else {
                 table.setText(FileFormat.defaultTableName(file.getName()));
                 if (format.isMultipleTables()) {
-                    table.setToolTipText("Prefix of the tables created");
+                    table.setToolTipText(H2GISMessages.import_table_prefix_tooltip);
                 }
             }
             table.addModifyListener(e -> validate());
@@ -113,14 +115,14 @@ public class ImportFilesDialog extends TitleAreaDialog {
         scrolled.setMinSize(grid.computeSize(SWT.DEFAULT, SWT.DEFAULT));
 
         replace = new Button(area, SWT.CHECK);
-        replace.setText("Replace the existing tables");
+        replace.setText(H2GISMessages.import_replace);
         replace.setLayoutData(new GridData(SWT.BEGINNING, SWT.CENTER, false, false));
         return area;
     }
 
     @Override
     protected void createButtonsForButtonBar(Composite parent) {
-        createButton(parent, IDialogConstants.OK_ID, "Import", true);
+        createButton(parent, IDialogConstants.OK_ID, H2GISMessages.import_button, true);
         createButton(parent, IDialogConstants.CANCEL_ID, IDialogConstants.CANCEL_LABEL, false);
         validate();
     }
@@ -140,14 +142,14 @@ public class ImportFilesDialog extends TitleAreaDialog {
             }
             String name = table.getText().trim();
             if (name.isEmpty()) {
-                error = "Give a table name to each file.";
+                error = H2GISMessages.import_error_name;
             } else if (!names.add(name.toUpperCase(Locale.ROOT))) {
-                error = "Two files are imported into the table " + name + ".";
+                error = NLS.bind(H2GISMessages.import_error_duplicate, name);
             }
             count++;
         }
         if (error == null && count == 0) {
-            error = "No file H2GIS can import.";
+            error = H2GISMessages.import_error_none;
         }
         setErrorMessage(error);
         Button ok = getButton(IDialogConstants.OK_ID);

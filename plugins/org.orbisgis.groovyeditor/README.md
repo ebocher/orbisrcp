@@ -295,6 +295,10 @@ h2gis.execute("DROP TABLE IF EXISTS pts; CREATE TABLE pts AS SELECT 'POINT(1 2)'
 h2gis.getSpatialTable("pts").each { println it.the_geom.buffer(10).area }
 ```
 
+## Languages
 
-
-
+The user interface (menus, dialogs, views) is in English and French: DBeaver shows the language of its user interface
+(*Window > Preferences > User Interface*, language). The texts are in `OSGI-INF/l10n/bundle*.properties` (plugin.xml)
+and in the `*Messages*.properties` files of the `internal` package (dialogs); another language is a copy of the
+`_fr` files with its language code (`_de`, `_es`...), non-ASCII characters written `\uXXXX`. The output of the
+scripts, the logs and the error messages of the databases stay in English.

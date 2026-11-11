@@ -18,6 +18,8 @@
  */
 package org.orbisgis.ui.editors.groovy.html;
 
+import org.eclipse.osgi.util.NLS;
+import org.orbisgis.ui.editors.groovy.internal.GroovyMessages;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.SWTError;
 import org.eclipse.jface.dialogs.MessageDialog;
@@ -64,8 +66,7 @@ public class HtmlView extends ViewPart {
         } catch (SWTError e) {
             LOGGER.error("Unable to create the web browser.", e);
             message = new Label(parent, SWT.WRAP);
-            message.setText("This view needs a web browser, which cannot be created here: " + e.getMessage()
-                    + "\nOn Linux, install WebKitGTK (libwebkit2gtk-4.1).");
+            message.setText(NLS.bind(GroovyMessages.browser_unavailable, e.getMessage()));
         }
         String secondaryId = getViewSite().getSecondaryId();
         if (secondaryId != null) {
@@ -119,7 +120,8 @@ public class HtmlView extends ViewPart {
             Files.write(Path.of(path), DownloadBridge.decode(dataUrl));
         } catch (Exception e) {
             LOGGER.error("Unable to save " + path, e);
-            MessageDialog.openError(getSite().getShell(), "Save", "Unable to save " + path + ": " + e.getMessage());
+            MessageDialog.openError(getSite().getShell(), GroovyMessages.save_title,
+                    NLS.bind(GroovyMessages.save_error, path, e.getMessage()));
         }
     }
 

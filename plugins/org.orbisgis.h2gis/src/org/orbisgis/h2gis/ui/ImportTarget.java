@@ -20,6 +20,8 @@
  */
 package org.orbisgis.h2gis.ui;
 
+import org.eclipse.osgi.util.NLS;
+import org.orbisgis.h2gis.internal.H2GISMessages;
 import org.jkiss.dbeaver.model.DBPDataSourceContainer;
 import org.jkiss.dbeaver.model.connection.DBPDriver;
 import org.jkiss.dbeaver.model.navigator.DBNDataSource;
@@ -86,6 +88,6 @@ public record ImportTarget(DBPDataSourceContainer container, String schema, DBNN
      * @return a description: "connection" or "connection, schema PUBLIC"
      */
     public String describe() {
-        return container.getName() + (schema == null ? "" : ", schema " + schema);
+        return schema == null ? container.getName() : NLS.bind(H2GISMessages.connection_schema, container.getName(), schema);
     }
 }

@@ -20,6 +20,8 @@
  */
 package org.orbisgis.h2gis.ui;
 
+import org.eclipse.osgi.util.NLS;
+import org.orbisgis.h2gis.internal.H2GISMessages;
 import org.eclipse.core.commands.AbstractHandler;
 import org.eclipse.core.commands.ExecutionEvent;
 import org.eclipse.jface.viewers.ISelection;
@@ -50,7 +52,7 @@ public class ImportFilesHandler extends AbstractHandler {
         }
         Shell shell = HandlerUtil.getActiveShell(event);
         FileDialog fileDialog = new FileDialog(shell, SWT.OPEN | SWT.MULTI);
-        fileDialog.setText("Import files in " + target.describe());
+        fileDialog.setText(NLS.bind(H2GISMessages.import_file_dialog, target.describe()));
         String[][] filters = FileFormat.dialogFilters();
         fileDialog.setFilterNames(filters[0]);
         fileDialog.setFilterExtensions(filters[1]);

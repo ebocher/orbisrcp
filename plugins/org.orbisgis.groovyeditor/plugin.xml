@@ -9,7 +9,7 @@
             locationURI="menu:org.eclipse.ui.main.menu?after=additions">
          <menu
                id="GroovyEditorMenu"
-               label="Groovy editor">
+               label="%menu.groovy">
             <command
                   commandId="org.orbisgis.ui.editor.groovy.editor.open">
             </command>
@@ -27,53 +27,53 @@
 
    <extension point="org.eclipse.ui.commands">
 
-      <category id="org.orbisgis.ui.editors.groovy" name="Groovy editor commands"/>
+      <category id="org.orbisgis.ui.editors.groovy" name="%category.commands"/>
 
       <command
             categoryId="org.eclipse.ui.category.edit"
-            description="Open a new editor"
+            description="%command.open.description"
             id="org.orbisgis.ui.editor.groovy.editor.open"
-            name="Open editor"> </command>
+            name="%command.open.name"> </command>
       <command
             categoryId="org.orbisgis.ui.editors.groovy"
-            description="Execute the script"
+            description="%command.execute.description"
             id="org.orbisgis.ui.editors.groovy.execute.script"
-            name="Execute script"> </command>
+            name="%command.execute.name"> </command>
       <command
             categoryId="org.orbisgis.ui.editors.groovy"
-            description="Execute the selection code"
+            description="%command.selection.description"
             id="org.orbisgis.ui.editors.groovy.execute.selection"
-            name="Execute selection"> </command>
+            name="%command.selection.name"> </command>
       <command
             categoryId="org.orbisgis.ui.editors.groovy"
-            description="Clear the script"
+            description="%command.clear.description"
             id="org.orbisgis.ui.editors.groovy.clear"
-            name="Clear script"> </command>
+            name="%command.clear.name"> </command>
      <command
             categoryId="org.orbisgis.ui.editors.groovy"
-            description="Delete all output groovy output (console)"
+            description="%command.clearOutput.description"
             id="org.orbisgis.ui.editors.groovy.clearOutput"
-            name="Delete output content"> </command>
+            name="%command.clearOutput.name"> </command>
       <command
             categoryId="org.orbisgis.ui.editors.groovy"
-            description="Stop the running process"
+            description="%command.stop.description"
             id="org.orbisgis.ui.editors.groovy.stopProcess"
-            name="Stop the running process"> </command>
+            name="%command.stop.name"> </command>
       <command
               categoryId="org.orbisgis.ui.editors.groovy"
-              description="Forget the variables, imports and libraries of the console"
+              description="%command.reset.description"
               id="org.orbisgis.ui.editors.groovy.resetContext"
-              name="Reset the Groovy context"> </command>
+              name="%command.reset.name"> </command>
       <command
               categoryId="org.orbisgis.ui.editors.groovy"
-              description="Libraries of the console: @Grab libraries, added jars and folders"
+              description="%command.classpath.description"
               id="org.orbisgis.ui.editors.groovy.listClasspaths"
-              name="Classpath"> </command>
+              name="%command.classpath.name"> </command>
       <command
               categoryId="org.orbisgis.ui.editors.groovy"
-              description="Indent the selected lines, or the whole script"
+              description="%command.format.description"
               id="org.orbisgis.ui.editors.groovy.format"
-              name="Format"> </command>
+              name="%command.format.name"> </command>
 
    </extension>
 
@@ -129,7 +129,7 @@
                 class="org.orbisgis.ui.editors.groovy.GroovyOutputConsole"
                 allowMultiple="false"
                 restorable="true"
-                name="Groovy Output"
+                name="%view.output"
 				icon="icons/groovy_output.png"
 		>
         </view>
@@ -138,7 +138,7 @@
                 class="org.orbisgis.ui.editors.groovy.html.HtmlView"
                 allowMultiple="true"
                 restorable="false"
-                name="Groovy Chart"
+                name="%view.chart"
                 icon="icons/groovy_output.png">
         </view>
     </extension>
@@ -149,7 +149,7 @@
             class="org.orbisgis.ui.editors.groovy.GroovyEditor"
             extensions="groovy"
             id="org.orbisgis.ui.editors.groovy.GroovyEditor"
-            name="Groovy editor">
+            name="%editor.name">
          <contentTypeBinding
                contentTypeId="org.jkiss.dbeaver.sql">
          </contentTypeBinding>
@@ -192,7 +192,7 @@
          point="org.eclipse.ui.contexts">
       <context
             id="org.orbisgis.ui.editors.groovy"
-            name="Groovy context"
+            name="%context.name"
             parentId="org.eclipse.ui.textEditorScope">
       </context>
    </extension>

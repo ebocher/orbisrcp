@@ -18,6 +18,7 @@
  */
 package org.orbisgis.ui.editors.groovy;
 
+import org.orbisgis.ui.editors.groovy.internal.GroovyMessages;
 import org.eclipse.core.runtime.NullProgressMonitor;
 import org.eclipse.jface.action.Action;
 import org.eclipse.jface.action.IAction;
@@ -327,18 +328,18 @@ public class GroovyEditor extends AbstractDecoratedTextEditor implements ISaveab
         };
         IAction action = new TextOperationAction(noResources, "ContentAssistProposal.", this,
                 ISourceViewer.CONTENTASSIST_PROPOSALS);
-        action.setText("Content Assist");
+        action.setText(GroovyMessages.editor_content_assist);
         action.setActionDefinitionId(ITextEditorActionDefinitionIds.CONTENT_ASSIST_PROPOSALS);
         setAction(CONTENT_ASSIST_ACTION, action);
         markAsStateDependentAction(CONTENT_ASSIST_ACTION, true);
 
-        IAction format = new Action("Format") {
+        IAction format = new Action(GroovyMessages.editor_format) {
             @Override
             public void run() {
                 format();
             }
         };
-        format.setToolTipText("Indent the selected lines, or the whole script");
+        format.setToolTipText(GroovyMessages.editor_format_tooltip);
         format.setActionDefinitionId(FORMAT_COMMAND);
         setAction(FORMAT_ACTION, format);
         markAsStateDependentAction(FORMAT_ACTION, true);

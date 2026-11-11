@@ -18,6 +18,8 @@
  */
 package org.orbisgis.ui.editors.groovy.ui;
 
+import org.eclipse.osgi.util.NLS;
+import org.orbisgis.ui.editors.groovy.internal.GroovyMessages;
 import groovy.lang.GroovySystem;
 import org.eclipse.jface.dialogs.Dialog;
 import org.eclipse.jface.dialogs.IDialogConstants;
@@ -75,7 +77,7 @@ public class ClasspathDialog extends Dialog {
     @Override
     protected void configureShell(Shell shell) {
         super.configureShell(shell);
-        shell.setText("Classpath of " + scriptName);
+        shell.setText(NLS.bind(GroovyMessages.classpath_title, scriptName));
     }
 
     @Override
@@ -84,8 +86,7 @@ public class ClasspathDialog extends Dialog {
         area.setLayout(new GridLayout(2, false));
 
         Label header = new Label(area, SWT.WRAP);
-        header.setText("Libraries loaded in this console, in addition to Groovy " + GroovySystem.getVersion()
-                + " (with groovy-sql, groovy-json, groovy-xml...) and the libraries of DBeaver (JTS...).");
+        header.setText(NLS.bind(GroovyMessages.classpath_header, GroovySystem.getVersion()));
         GridData headerData = new GridData(SWT.FILL, SWT.TOP, true, false, 2, 1);
         headerData.widthHint = 700;
         header.setLayoutData(headerData);
@@ -97,7 +98,9 @@ public class ClasspathDialog extends Dialog {
         tableData.heightHint = 320;
         tableData.widthHint = 700;
         table.setLayoutData(tableData);
-        for (String title : new String[]{"Library", "Version", "Group", "Origin", "Path"}) {
+        for (String title : new String[]{GroovyMessages.classpath_column_library, GroovyMessages.classpath_column_version,
+                GroovyMessages.classpath_column_group, GroovyMessages.classpath_column_origin,
+                GroovyMessages.classpath_column_path}) {
             new TableColumn(table, SWT.LEFT).setText(title);
         }
         table.addListener(SWT.Selection, e -> updateButtons());
@@ -105,13 +108,12 @@ public class ClasspathDialog extends Dialog {
         Composite buttons = new Composite(area, SWT.NONE);
         buttons.setLayout(new GridLayout(1, true));
         buttons.setLayoutData(new GridData(SWT.FILL, SWT.TOP, false, false));
-        createButton(buttons, "Add jar...", this::addJar);
-        createButton(buttons, "Add folder...", this::addFolder);
-        removeButton = createButton(buttons, "Remove", this::removeSelection);
+        createButton(buttons, GroovyMessages.classpath_add_jar, this::addJar);
+        createButton(buttons, GroovyMessages.classpath_add_folder, this::addFolder);
+        removeButton = createButton(buttons, GroovyMessages.classpath_remove, this::removeSelection);
 
         Label note = new Label(area, SWT.WRAP);
-        note.setText("Added jars and folders are available in all the consoles. A removed one stays loaded in the "
-                + "open consoles until their context is reset; @Grab libraries are forgotten when the context is reset.");
+        note.setText(GroovyMessages.classpath_note);
         GridData noteData = new GridData(SWT.FILL, SWT.TOP, true, false, 2, 1);
         noteData.widthHint = 700;
         note.setLayoutData(noteData);
@@ -130,7 +132,7 @@ public class ClasspathDialog extends Dialog {
 
     @Override
     protected void createButtonsForButtonBar(Composite parent) {
-        createButton(parent, COPY_ID, "Copy list", false);
+        createButton(parent, COPY_ID, GroovyMessages.classpath_copy, false);
         createButton(parent, IDialogConstants.CLOSE_ID, IDialogConstants.CLOSE_LABEL, true);
     }
 
@@ -150,7 +152,7 @@ public class ClasspathDialog extends Dialog {
         table.removeAll();
         for (Entry entry : entries) {
             TableItem item = new TableItem(table, SWT.NONE);
-            item.setText(new String[]{entry.name(), entry.version(), entry.group(), entry.origin().getLabel(),
+            item.setText(new String[]{entry.name(), entry.version(), entry.group(), originLabel(entry.origin()),
                     entry.path()});
         }
         for (TableColumn column : table.getColumns()) {
@@ -191,6 +193,14 @@ public class ClasspathDialog extends Dialog {
             ClassPathHandler.removeURL(entries.get(index).url());
         }
         refresh();
+    }
+
+    private static String originLabel(Origin origin) {
+        return switch (origin) {
+            case ADDED -> GroovyMessages.classpath_origin_added;
+            case GRAB -> GroovyMessages.classpath_origin_grab;
+            case OTHER -> GroovyMessages.classpath_origin_other;
+        };
     }
 
     private void copyList() {
