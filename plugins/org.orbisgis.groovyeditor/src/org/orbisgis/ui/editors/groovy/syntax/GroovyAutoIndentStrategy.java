@@ -66,6 +66,10 @@ public class GroovyAutoIndentStrategy implements IAutoEditStrategy {
     }
 
     private void newLine(IDocument document, DocumentCommand command) throws BadLocationException {
+        // After /** or /*, in a block comment: " * " lines, comment closed, documentation tags
+        if (CommentEditing.newLine(document, command)) {
+            return;
+        }
         if (insideMultiLinePartition(document, command.offset)) {
             defaultStrategy.customizeDocumentCommand(document, command);
             return;

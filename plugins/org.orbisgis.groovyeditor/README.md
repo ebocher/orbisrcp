@@ -61,6 +61,9 @@ nothing is selected), `Ctrl+Space` opens the completion (it also opens after a `
 
 ### Indentation and formatting
 
+- Comments, as in the Java editor: Enter after `/**` closes the comment and, above a method or a closure
+  (`def add = { a, b -> }`), adds its `@param` and `@return` tags; Enter after `/*` closes the comment; Enter in a
+  block comment starts the new line with ` * `.
 - Enter indents the new line after `{`, `[` or `(`; a closing bracket typed at the start of a line is aligned on
   the line of its opening bracket.
 - **Format** (`Ctrl+Shift+F`, or right click > Format) indents the selected lines, or the whole script: depth of the
