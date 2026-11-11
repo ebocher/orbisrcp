@@ -91,4 +91,55 @@
         <repository id="central-portal-snapshots" snapshot="true" name="Maven Central snapshots" url="https://central.sonatype.com/repository/maven-snapshots/" order="100"/>
     </extension>
 
+
+    <!-- Import files (GeoJSON, FlatGeobuf, Shapefile...) in an H2GIS connection, from the navigator -->
+    <extension point="org.eclipse.core.expressions.propertyTesters">
+        <propertyTester
+                id="org.orbisgis.h2gis.propertyTester"
+                class="org.orbisgis.h2gis.ui.H2GISPropertyTester"
+                namespace="org.orbisgis.h2gis"
+                properties="isH2GIS"
+                type="java.lang.Object"/>
+    </extension>
+
+    <extension point="org.eclipse.ui.commands">
+        <command
+                id="org.orbisgis.h2gis.importFiles"
+                name="Import files..."
+                description="Import GeoJSON, FlatGeobuf, Shapefile, GPX, OSM, CSV... files with the H2GIS functions"/>
+    </extension>
+
+    <extension point="org.eclipse.ui.handlers">
+        <handler
+                commandId="org.orbisgis.h2gis.importFiles"
+                class="org.orbisgis.h2gis.ui.ImportFilesHandler">
+            <enabledWhen>
+                <with variable="selection">
+                    <count value="1"/>
+                    <iterate operator="and">
+                        <test property="org.orbisgis.h2gis.isH2GIS"/>
+                    </iterate>
+                </with>
+            </enabledWhen>
+        </handler>
+    </extension>
+
+    <extension point="org.eclipse.ui.menus">
+        <menuContribution allPopups="false" locationURI="popup:org.eclipse.ui.popup.any?after=export_import">
+            <command
+                    commandId="org.orbisgis.h2gis.importFiles"
+                    icon="icons/h2gis_icon.png"
+                    label="Import files...">
+                <visibleWhen checkEnabled="false">
+                    <with variable="selection">
+                        <count value="1"/>
+                        <iterate operator="and">
+                            <test property="org.orbisgis.h2gis.isH2GIS"/>
+                        </iterate>
+                    </with>
+                </visibleWhen>
+            </command>
+        </menuContribution>
+    </extension>
+
 </plugin>

@@ -17,3 +17,30 @@ To install the last H2GIS snaptshot version :
 4. Click `Next` -> `Finish` and Restart DBeaver.
 
 ![](https://github.com/orbisgis/geoclimate/blob/master/docs/resources/images/for_users/dbeaver_install_plugins.png)
+
+## Import files
+
+Right click on an H2GIS connection, one of its schemas or its *Tables* folder in the Database Navigator, then
+**Import files...** (next to *Import Data*). It works with the H2GIS snapshot drivers of this plugin and with the
+H2GIS drivers of DBeaver.
+
+Choose one or several files: each one is read by its H2GIS function into a table, in the selected schema (the default
+schema from the connection). The table name, proposed from the file name (`Communes 2024.geojson` gives
+`COMMUNES_2024`), can be changed. *Replace the existing tables* replaces a table of the same name; without it, the
+import of that file fails.
+
+| Format | Extensions | H2GIS function |
+|---|---|---|
+| GeoJSON | `.geojson`, `.json`, `.geojson.gz` | `GeoJsonRead` |
+| FlatGeobuf | `.fgb` | `FGBRead` |
+| Shapefile | `.shp` | `SHPRead` |
+| dBase | `.dbf`, `.dbf.gz` | `DBFRead` |
+| GPX | `.gpx`, `.gpx.gz` | `GPXRead` (several tables, named with the table name as prefix) |
+| OpenStreetMap | `.osm`, `.osm.gz`, `.osm.bz2` | `OSMRead` (several tables, named with the table name as prefix) |
+| ASCII grid | `.asc`, `.asc.gz` | `AscRead` |
+| TSV | `.tsv`, `.tsv.gz` | `TSVRead` |
+| CSV | `.csv` | `CSVREAD` of H2 |
+
+The import runs in the background (the connection is opened if needed); the navigator is then refreshed, and a
+summary gives the rows of each table, or the error of each file which failed.
+
