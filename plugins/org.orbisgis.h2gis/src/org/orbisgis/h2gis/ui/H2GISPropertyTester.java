@@ -24,15 +24,22 @@ import org.eclipse.core.expressions.PropertyTester;
 
 /**
  * {@code org.orbisgis.h2gis.isH2GIS}: true for a navigator node of an H2GIS connection (the connection, a schema,
- * a folder...). Shows the H2GIS menu entries.
+ * a folder...); {@code org.orbisgis.h2gis.isH2GISTable}: true for a table or a view of an H2GIS connection.
+ * Show the H2GIS menu entries.
  */
 public class H2GISPropertyTester extends PropertyTester {
 
     public static final String NAMESPACE = "org.orbisgis.h2gis";
     public static final String PROP_IS_H2GIS = "isH2GIS";
+    /** A table (or a view) of an H2GIS connection */
+    public static final String PROP_IS_H2GIS_TABLE = "isH2GISTable";
 
     @Override
     public boolean test(Object receiver, String property, Object[] args, Object expectedValue) {
-        return PROP_IS_H2GIS.equals(property) && ImportTarget.of(receiver) != null;
+        return switch (property) {
+            case PROP_IS_H2GIS -> ImportTarget.of(receiver) != null;
+            case PROP_IS_H2GIS_TABLE -> ExportSource.of(receiver) != null;
+            default -> false;
+        };
     }
 }
