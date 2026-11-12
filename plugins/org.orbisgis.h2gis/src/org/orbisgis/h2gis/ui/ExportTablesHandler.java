@@ -30,6 +30,8 @@ import org.eclipse.ui.handlers.HandlerUtil;
 
 import java.util.ArrayList;
 import java.util.List;
+import org.orbisgis.h2gis.engine.SqlEngine;
+import org.orbisgis.h2gis.engine.FileIOEngine;
 
 /**
  * Export the tables selected in the navigator (H2GIS connections) to files: GeoJSON, FlatGeobuf, Shapefile...
@@ -42,9 +44,10 @@ public class ExportTablesHandler extends AbstractHandler {
         if (!(selection instanceof IStructuredSelection structured)) {
             return null;
         }
+        FileIOEngine engine = engine();
         List<ExportSource> tables = new ArrayList<>();
         for (Object element : structured.toList()) {
-            ExportSource source = ExportSource.of(element);
+            ExportSource source = ExportSource.of(element, engine::accepts);
             if (source != null) {
                 tables.add(source);
             }
@@ -53,10 +56,17 @@ public class ExportTablesHandler extends AbstractHandler {
             return null;
         }
         Shell shell = HandlerUtil.getActiveShell(event);
-        ExportTablesDialog dialog = new ExportTablesDialog(shell, tables);
+        ExportTablesDialog dialog = new ExportTablesDialog(shell, engine, tables);
         if (dialog.open() == Window.OK && !dialog.getExports().isEmpty()) {
-            new ExportTablesJob(dialog.getExports()).schedule();
+            new ExportTablesJob(engine, dialog.getExports()).schedule();
         }
         return null;
+    }
+
+    /**
+     * @return the engine running the exports: the H2GIS SQL functions; overridden for other databases
+     */
+    protected FileIOEngine engine() {
+        return SqlEngine.INSTANCE;
     }
 }

@@ -38,6 +38,9 @@
                     <file type="jar" path="maven:/org.orbisgis:h2gis:2.2.6-SNAPSHOT"/>
                     <file type="jar" path="maven:/org.orbisgis:h2gis-api:2.2.6-SNAPSHOT"/>
                     <file type="jar" path="maven:/org.orbisgis:h2gis-utilities:2.2.6-SNAPSHOT"/>
+                    <!-- JTS geometries with the PostgreSQL JDBC driver (and the driver itself): used by the
+                         plugin org.orbisgis.postgis.io to run the H2GIS file functions on PostGIS connections -->
+                    <file type="jar" path="maven:/org.orbisgis:postgis-jts:2.2.6-SNAPSHOT"/>
 
                     <parameter name="query-get-active-db" value="SELECT SCHEMA()"/>
                     <parameter name="query-set-active-db" value="SET SCHEMA = ?"/>
@@ -121,7 +124,7 @@
                 <with variable="selection">
                     <count value="1"/>
                     <iterate operator="and">
-                        <test property="org.orbisgis.h2gis.isH2GIS"/>
+                        <test property="org.orbisgis.h2gis.isH2GIS" forcePluginActivation="true"/>
                     </iterate>
                 </with>
             </enabledWhen>
@@ -136,7 +139,7 @@
                 <with variable="selection">
                     <count value="+"/>
                     <iterate operator="and">
-                        <test property="org.orbisgis.h2gis.isH2GISTable"/>
+                        <test property="org.orbisgis.h2gis.isH2GISTable" forcePluginActivation="true"/>
                     </iterate>
                 </with>
             </enabledWhen>
@@ -153,7 +156,7 @@
                     <with variable="selection">
                         <count value="1"/>
                         <iterate operator="and">
-                            <test property="org.orbisgis.h2gis.isH2GIS"/>
+                            <test property="org.orbisgis.h2gis.isH2GIS" forcePluginActivation="true"/>
                         </iterate>
                     </with>
                 </visibleWhen>
@@ -168,7 +171,7 @@
                     <with variable="selection">
                         <count value="+"/>
                         <iterate operator="and">
-                            <test property="org.orbisgis.h2gis.isH2GISTable"/>
+                            <test property="org.orbisgis.h2gis.isH2GISTable" forcePluginActivation="true"/>
                         </iterate>
                     </with>
                 </visibleWhen>

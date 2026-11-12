@@ -36,6 +36,8 @@ import org.orbisgis.h2gis.importer.FileFormat;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import org.orbisgis.h2gis.engine.SqlEngine;
+import org.orbisgis.h2gis.engine.FileIOEngine;
 
 /**
  * Import files (GeoJSON, FlatGeobuf, Shapefile...) in the H2GIS connection selected in the navigator.
@@ -46,7 +48,8 @@ public class ImportFilesHandler extends AbstractHandler {
     public Object execute(ExecutionEvent event) {
         ISelection selection = HandlerUtil.getCurrentSelection(event);
         Object element = selection instanceof IStructuredSelection structured ? structured.getFirstElement() : null;
-        ImportTarget target = ImportTarget.of(element);
+        FileIOEngine engine = engine();
+        ImportTarget target = ImportTarget.of(element, engine::accepts);
         if (target == null) {
             return null;
         }
@@ -63,10 +66,17 @@ public class ImportFilesHandler extends AbstractHandler {
         for (String name : fileDialog.getFileNames()) {
             files.add(new File(fileDialog.getFilterPath(), name));
         }
-        ImportFilesDialog dialog = new ImportFilesDialog(shell, target, files);
+        ImportFilesDialog dialog = new ImportFilesDialog(shell, engine, target, files);
         if (dialog.open() == Window.OK && !dialog.getImports().isEmpty()) {
-            new ImportFilesJob(target, dialog.getImports()).schedule();
+            new ImportFilesJob(engine, target, dialog.getImports()).schedule();
         }
         return null;
+    }
+
+    /**
+     * @return the engine running the imports: the H2GIS SQL functions; overridden for other databases
+     */
+    protected FileIOEngine engine() {
+        return SqlEngine.INSTANCE;
     }
 }

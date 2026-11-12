@@ -47,6 +47,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import org.orbisgis.h2gis.engine.SqlEngine;
+import org.orbisgis.h2gis.engine.FileIOEngine;
 
 /**
  * The tables to export: the format, the folder, and the name of the file of each table.
@@ -57,6 +59,7 @@ public class ExportTablesDialog extends TitleAreaDialog {
     private static String lastFolder = System.getProperty("user.home");
     private static ExportFormat lastFormat = ExportFormat.GEOJSON;
 
+    private final FileIOEngine engine;
     private final List<ExportSource> tables;
     private final List<Text> fileNames = new ArrayList<>();
     private final List<ExportOptions> tableOptions = new ArrayList<>();
@@ -67,7 +70,15 @@ public class ExportTablesDialog extends TitleAreaDialog {
     private final List<ExportTablesJob.Item> exports = new ArrayList<>();
 
     public ExportTablesDialog(Shell shell, List<ExportSource> tables) {
+        this(shell, SqlEngine.INSTANCE, tables);
+    }
+
+    /**
+     * @param engine runs the exports: tells if a script can be shown
+     */
+    public ExportTablesDialog(Shell shell, FileIOEngine engine, List<ExportSource> tables) {
         super(shell);
+        this.engine = engine;
         this.tables = tables;
         setShellStyle(getShellStyle() | SWT.RESIZE);
     }
@@ -159,7 +170,9 @@ public class ExportTablesDialog extends TitleAreaDialog {
 
     @Override
     protected void createButtonsForButtonBar(Composite parent) {
-        createButton(parent, IDialogConstants.DETAILS_ID, H2GISMessages.view_script_button, false);
+        if (engine.hasScript()) {
+            createButton(parent, IDialogConstants.DETAILS_ID, H2GISMessages.view_script_button, false);
+        }
         createButton(parent, IDialogConstants.OK_ID, H2GISMessages.export_button, true);
         createButton(parent, IDialogConstants.CANCEL_ID, IDialogConstants.CANCEL_LABEL, false);
         validate();

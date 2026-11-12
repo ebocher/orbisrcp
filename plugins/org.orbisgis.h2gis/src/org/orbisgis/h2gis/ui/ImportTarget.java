@@ -32,6 +32,7 @@ import org.jkiss.dbeaver.model.struct.rdb.DBSSchema;
 
 import java.util.Locale;
 import java.util.Set;
+import java.util.function.Predicate;
 
 /**
  * Where files are imported: an H2GIS connection, and a schema when a schema (or one of its folders) is selected.
@@ -49,11 +50,19 @@ public record ImportTarget(DBPDataSourceContainer container, String schema, DBNN
      * @return the target of a selected navigator node, null if it is not in an H2GIS connection
      */
     public static ImportTarget of(Object element) {
+        return of(element, ImportTarget::isH2GIS);
+    }
+
+    /**
+     * @param accepts the connections accepted (the ones of an engine)
+     * @return the target of a selected navigator node, null if it is not in an accepted connection
+     */
+    public static ImportTarget of(Object element, Predicate<DBPDataSourceContainer> accepts) {
         if (!(element instanceof DBNDatabaseNode node)) {
             return null;
         }
         DBPDataSourceContainer container = node.getDataSourceContainer();
-        if (container == null || !isH2GIS(container)) {
+        if (container == null || !accepts.test(container)) {
             return null;
         }
         DBNNode connection = node;

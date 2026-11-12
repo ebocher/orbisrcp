@@ -29,6 +29,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.List;
 import java.util.Locale;
+import java.util.function.Consumer;
 
 /**
  * Export of a table of an H2GIS database to a file, with the write function of its format.
@@ -140,6 +141,31 @@ public final class TableExport {
         return file;
     }
 
+    public ExportFormat getFormat() {
+        return format;
+    }
+
+    /**
+     * @return true to replace an existing file
+     */
+    public boolean isOverwrite() {
+        return overwrite;
+    }
+
+    /**
+     * @return why the file cannot be written (it exists, its folder does not), null if it can
+     */
+    public String checkFile() {
+        if (file.exists() && !overwrite) {
+            return H2GISMessages.export_error_exists;
+        }
+        File folder = file.getAbsoluteFile().getParentFile();
+        if (folder != null && !folder.isDirectory()) {
+            return NLS.bind(H2GISMessages.export_error_no_folder, folder);
+        }
+        return null;
+    }
+
     /**
      * @return a file name for a table: its name in lower case, with the extension of the format
      */
@@ -168,14 +194,23 @@ public final class TableExport {
      * @return the result; the errors are in the result, not thrown
      */
     public Result run(Connection connection) {
-        if (file.exists() && !overwrite) {
-            return new Result(tableName, file, -1, H2GISMessages.export_error_exists);
-        }
-        File folder = file.getAbsoluteFile().getParentFile();
-        if (folder != null && !folder.isDirectory()) {
-            return new Result(tableName, file, -1, NLS.bind(H2GISMessages.export_error_no_folder, folder));
+        return run(connection, statement -> {
+        });
+    }
+
+    /**
+     * Run the export.
+     *
+     * @param started called with the statement before it runs: it can be canceled from another thread
+     * @return the result; the errors are in the result, not thrown
+     */
+    public Result run(Connection connection, Consumer<Statement> started) {
+        String fileError = checkFile();
+        if (fileError != null) {
+            return new Result(tableName, file, -1, fileError);
         }
         try (Statement statement = connection.createStatement()) {
+            started.accept(statement);
             for (String sql : statements()) {
                 statement.execute(sql);
             }
@@ -189,7 +224,7 @@ public final class TableExport {
         }
     }
 
-    static String message(Throwable error) {
+    public static String message(Throwable error) {
         for (Throwable e = error; e != null; e = e.getCause() == e ? null : e.getCause()) {
             if (e.getMessage() != null && !e.getMessage().isBlank()) {
                 return e.getMessage().strip();

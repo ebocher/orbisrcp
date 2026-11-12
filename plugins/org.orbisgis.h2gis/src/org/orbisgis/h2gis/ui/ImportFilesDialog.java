@@ -43,12 +43,15 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import org.orbisgis.h2gis.engine.SqlEngine;
+import org.orbisgis.h2gis.engine.FileIOEngine;
 
 /**
  * The files to import, with their format and the name of their table.
  */
 public class ImportFilesDialog extends TitleAreaDialog {
 
+    private final FileIOEngine engine;
     private final ImportTarget target;
     private final List<File> files;
     private final List<Text> tableNames = new ArrayList<>();
@@ -56,7 +59,15 @@ public class ImportFilesDialog extends TitleAreaDialog {
     private final List<FileImport> imports = new ArrayList<>();
 
     public ImportFilesDialog(Shell shell, ImportTarget target, List<File> files) {
+        this(shell, SqlEngine.INSTANCE, target, files);
+    }
+
+    /**
+     * @param engine runs the imports: gives the default table names, and if a script can be shown
+     */
+    public ImportFilesDialog(Shell shell, FileIOEngine engine, ImportTarget target, List<File> files) {
         super(shell);
+        this.engine = engine;
         this.target = target;
         this.files = files;
         setShellStyle(getShellStyle() | SWT.RESIZE);
@@ -103,7 +114,7 @@ public class ImportFilesDialog extends TitleAreaDialog {
             if (format == null) {
                 table.setEnabled(false);
             } else {
-                table.setText(FileFormat.defaultTableName(file.getName()));
+                table.setText(engine.defaultTableName(file.getName()));
                 if (format.isMultipleTables()) {
                     table.setToolTipText(H2GISMessages.import_table_prefix_tooltip);
                 }
@@ -122,7 +133,9 @@ public class ImportFilesDialog extends TitleAreaDialog {
 
     @Override
     protected void createButtonsForButtonBar(Composite parent) {
-        createButton(parent, IDialogConstants.DETAILS_ID, H2GISMessages.view_script_button, false);
+        if (engine.hasScript()) {
+            createButton(parent, IDialogConstants.DETAILS_ID, H2GISMessages.view_script_button, false);
+        }
         createButton(parent, IDialogConstants.OK_ID, H2GISMessages.import_button, true);
         createButton(parent, IDialogConstants.CANCEL_ID, IDialogConstants.CANCEL_LABEL, false);
         validate();

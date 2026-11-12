@@ -8,6 +8,10 @@ OrbisRCP plugins have only been supported since version 26.2.4 of Dbeaver.
 
 Please look at the readme file available in the directory of the plugins you want to install.
 
+- `org.orbisgis.groovyeditor`: a Groovy console with completion, `@Grab`, access to the DBeaver connections, Vega-Lite charts.
+- `org.orbisgis.h2gis`: H2GIS drivers following the development version (snapshots), import and export of files.
+- `org.orbisgis.postgis.io`: import and export of files in the PostgreSQL/PostGIS connections, with the file drivers of H2GIS.
+
 If you have any questions, comments or troubles with the plugins, feel free to push an issue. 
 We will do our best to address them.
 

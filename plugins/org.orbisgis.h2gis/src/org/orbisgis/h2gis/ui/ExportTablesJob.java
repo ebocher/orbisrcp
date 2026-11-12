@@ -37,6 +37,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.orbisgis.h2gis.engine.SqlEngine;
+import org.orbisgis.h2gis.engine.FileIOEngine;
 
 /**
  * Export tables of H2GIS databases to files, in the background, then show a summary.
@@ -52,10 +54,19 @@ public class ExportTablesJob extends AbstractJob {
     public record Item(ExportSource source, TableExport export) {
     }
 
+    private final FileIOEngine engine;
     private final List<Item> items;
 
     public ExportTablesJob(List<Item> items) {
+        this(SqlEngine.INSTANCE, items);
+    }
+
+    /**
+     * @param engine runs the exports
+     */
+    public ExportTablesJob(FileIOEngine engine, List<Item> items) {
         super(H2GISMessages.export_job);
+        this.engine = engine;
         this.items = items;
         setUser(true);
     }
@@ -77,17 +88,13 @@ public class ExportTablesJob extends AbstractJob {
                     monitor.subTask(NLS.bind(H2GISMessages.job_connect, container.getName()));
                     container.connect(monitor, true, true);
                 }
-                DBPDataSource dataSource = container.getDataSource();
-                if (dataSource == null) {
-                    throw new IllegalStateException(NLS.bind(H2GISMessages.job_connect_error, container.getName()));
-                }
-                try (JDBCSession session = DBUtils.openUtilSession(monitor, dataSource, "Export to files")) {
+                try (FileIOEngine.Session session = engine.open(container, monitor)) {
                     for (TableExport export : entry.getValue()) {
                         if (monitor.isCanceled()) {
                             break;
                         }
                         monitor.subTask(export.getTableName() + " → " + export.getFile().getName());
-                        results.add(export.run(session));
+                        results.add(session.exportTable(export, monitor));
                         monitor.worked(1);
                     }
                 }

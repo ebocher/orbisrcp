@@ -71,6 +71,14 @@ geographic format (GeoJSON, FlatGeobuf, Shapefile, KML) without the geometry col
 The export runs in the background; a summary gives the rows of each file, or the error of each table which failed.
 The format and the folder are remembered until DBeaver is closed.
 
+## Stop an import or an export
+
+The imports and exports run in a DBeaver job: stop it from the progress view (red square). The running statement
+is canceled, with the H2 session: the H2GIS function stops at its next SQL command (the insert of a row, the read of
+the table). The file being imported or exported is marked *Canceled* in the summary, the next ones are skipped; a
+table partly imported stays in the database. With an H2GIS server (TCP), H2 cannot stop the function: it ends
+normally.
+
 ## View script
 
 The import and export dialogs have a **View script...** button, as the *Delete* confirmation of DBeaver: it shows the
@@ -78,10 +86,8 @@ SQL statements which will be run, one `CALL` (or `CSVREAD`/`CSVWRITE`) per file,
 there, *Execute* runs the import or the export (as the button of the dialog), *Copy* copies the script, and *Open in
 SQL editor* opens it in an SQL console to modify it or keep it.
 
-## Languages
+## PostgreSQL/PostGIS
 
-The user interface (menus, dialogs, views) is in English and French: DBeaver shows the language of its user interface
-(*Window > Preferences > User Interface*, language). The texts are in `OSGI-INF/l10n/bundle*.properties` (plugin.xml)
-and in the `*Messages*.properties` files of the `internal` package (dialogs); another language is a copy of the
-`_fr` files with its language code (`_de`, `_es`...), non-ASCII characters written `\uXXXX`. The output of the
-scripts, the logs and the error messages of the databases stay in English.
+The same menus are available in the PostgreSQL connections with the plugin `org.orbisgis.postgis.io` (feature
+*PostGIS files import and export*): it runs the H2GIS file drivers on a PostGIS connection. The **H2GIS Embedded
+Snapshot** driver lists `postgis-jts` (and the PostgreSQL JDBC driver) in its libraries for it.

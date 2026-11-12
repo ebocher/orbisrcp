@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?eclipse version="3.2"?>
+
+<!-- Import and export of files (GeoJSON, FlatGeobuf, Shapefile...) in the PostgreSQL/PostGIS connections, from
+     the Database Navigator. The dialogs are the ones of the H2GIS plugin; the files are read and written by the
+     H2GIS file drivers (libraries of the H2GIS Snapshot driver), on a dedicated JDBC connection. -->
+<plugin>
+
+    <extension point="org.eclipse.core.expressions.propertyTesters">
+        <propertyTester
+                id="org.orbisgis.postgis.io.propertyTester"
+                class="org.orbisgis.postgis.io.ui.PostGISPropertyTester"
+                namespace="org.orbisgis.postgis.io"
+                properties="isPostGIS,isPostGISTable"
+                type="java.lang.Object"/>
+    </extension>
+
+    <extension point="org.eclipse.ui.commands">
+        <command
+                id="org.orbisgis.postgis.io.importFiles"
+                name="%command.import.name"
+                description="%command.import.description"/>
+        <command
+                id="org.orbisgis.postgis.io.exportTables"
+                name="%command.export.name"
+                description="%command.export.description"/>
+    </extension>
+
+    <extension point="org.eclipse.ui.handlers">
+        <handler
+                commandId="org.orbisgis.postgis.io.importFiles"
+                class="org.orbisgis.postgis.io.ui.PostGISImportFilesHandler">
+            <enabledWhen>
+                <with variable="selection">
+                    <count value="1"/>
+                    <iterate operator="and">
+                        <test property="org.orbisgis.postgis.io.isPostGIS" forcePluginActivation="true"/>
+                    </iterate>
+                </with>
+            </enabledWhen>
+        </handler>
+        <handler
+                commandId="org.orbisgis.postgis.io.exportTables"
+                class="org.orbisgis.postgis.io.ui.PostGISExportTablesHandler">
+            <enabledWhen>
+                <with variable="selection">
+                    <count value="+"/>
+                    <iterate operator="and">
+                        <test property="org.orbisgis.postgis.io.isPostGISTable" forcePluginActivation="true"/>
+                    </iterate>
+                </with>
+            </enabledWhen>
+        </handler>
+    </extension>
+
+    <extension point="org.eclipse.ui.menus">
+        <menuContribution allPopups="false" locationURI="popup:org.eclipse.ui.popup.any?after=export_import">
+            <command
+                    commandId="org.orbisgis.postgis.io.importFiles"
+                    icon="platform:/plugin/org.orbisgis.h2gis/icons/h2gis_icon.png"
+                    label="%command.import.name">
+                <visibleWhen checkEnabled="false">
+                    <with variable="selection">
+                        <count value="1"/>
+                        <iterate operator="and">
+                            <test property="org.orbisgis.postgis.io.isPostGIS" forcePluginActivation="true"/>
+                        </iterate>
+                    </with>
+                </visibleWhen>
+            </command>
+        </menuContribution>
+        <menuContribution allPopups="false" locationURI="popup:org.eclipse.ui.popup.any?after=export_import">
+            <command
+                    commandId="org.orbisgis.postgis.io.exportTables"
+                    icon="platform:/plugin/org.orbisgis.h2gis/icons/h2gis_icon.png"
+                    label="%command.export.name">
+                <visibleWhen checkEnabled="false">
+                    <with variable="selection">
+                        <count value="+"/>
+                        <iterate operator="and">
+                            <test property="org.orbisgis.postgis.io.isPostGISTable" forcePluginActivation="true"/>
+                        </iterate>
+                    </with>
+                </visibleWhen>
+            </command>
+        </menuContribution>
+    </extension>
+
+</plugin>

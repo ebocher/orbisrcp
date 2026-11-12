@@ -18,6 +18,7 @@
 		<module>org.orbisgis.core</module>
 		<module>org.orbisgis.groovyeditor</module>
 		<module>org.orbisgis.h2gis</module>
+		<module>org.orbisgis.postgis.io</module>
 	</modules>
 
 </project>

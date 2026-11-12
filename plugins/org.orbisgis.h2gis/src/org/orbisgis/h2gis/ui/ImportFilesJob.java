@@ -36,6 +36,8 @@ import org.orbisgis.h2gis.importer.FileImport;
 
 import java.util.ArrayList;
 import java.util.List;
+import org.orbisgis.h2gis.engine.SqlEngine;
+import org.orbisgis.h2gis.engine.FileIOEngine;
 
 /**
  * Import files in an H2GIS database, in the background. The connection is opened if needed; the navigator is
@@ -43,11 +45,20 @@ import java.util.List;
  */
 public class ImportFilesJob extends AbstractJob {
 
+    private final FileIOEngine engine;
     private final ImportTarget target;
     private final List<FileImport> imports;
 
     public ImportFilesJob(ImportTarget target, List<FileImport> imports) {
+        this(SqlEngine.INSTANCE, target, imports);
+    }
+
+    /**
+     * @param engine runs the imports
+     */
+    public ImportFilesJob(FileIOEngine engine, ImportTarget target, List<FileImport> imports) {
         super(NLS.bind(H2GISMessages.import_job, target.describe()));
+        this.engine = engine;
         this.target = target;
         this.imports = imports;
         setUser(true);
@@ -64,17 +75,13 @@ public class ImportFilesJob extends AbstractJob {
                 monitor.subTask(NLS.bind(H2GISMessages.job_connect, container.getName()));
                 container.connect(monitor, true, true);
             }
-            DBPDataSource dataSource = container.getDataSource();
-            if (dataSource == null) {
-                throw new IllegalStateException(NLS.bind(H2GISMessages.job_connect_error, container.getName()));
-            }
-            try (JDBCSession session = DBUtils.openUtilSession(monitor, dataSource, "Import files")) {
+            try (FileIOEngine.Session session = engine.open(container, monitor)) {
                 for (FileImport fileImport : imports) {
                     if (monitor.isCanceled()) {
                         break;
                     }
                     monitor.subTask(fileImport.getFile().getName());
-                    results.add(fileImport.run(session));
+                    results.add(session.importFile(fileImport, monitor));
                     monitor.worked(1);
                 }
             }

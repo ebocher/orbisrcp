@@ -59,6 +59,7 @@ public final class H2GISMessages extends NLS {
     public static String export_column_file;
     public static String export_replace;
     public static String export_button;
+    public static String canceled;
     public static String view_script_button;
     public static String import_script_title;
     public static String export_script_title;

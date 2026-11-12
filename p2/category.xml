@@ -12,5 +12,9 @@
 		version="1.0.0.qualifier">
 		<category name="org.orbisgis.rcp" />
 	</feature>
+	<feature url="features/postgis-io_1.0.0.qualifier.jar" id="postgis-io"
+		version="1.0.0.qualifier">
+		<category name="org.orbisgis.rcp" />
+	</feature>
 	<category-def name="org.orbisgis.rcp" label="OrbisGIS" />
 </site>

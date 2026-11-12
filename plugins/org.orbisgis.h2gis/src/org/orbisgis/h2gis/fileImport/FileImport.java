@@ -28,6 +28,7 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
+import java.util.function.Consumer;
 
 /**
  * Import of a file in an H2GIS database, with the read function of its format.
@@ -79,6 +80,24 @@ public final class FileImport {
         return file;
     }
 
+    public FileFormat getFormat() {
+        return format;
+    }
+
+    /**
+     * @return the name of the table, as written by the user
+     */
+    public String getTable() {
+        return table;
+    }
+
+    /**
+     * @return true to replace an existing table
+     */
+    public boolean isReplace() {
+        return replace;
+    }
+
     /**
      * @return the table, with its schema: SCHEMA.TABLE
      */
@@ -112,7 +131,19 @@ public final class FileImport {
      * @return the result; the errors are in the result, not thrown
      */
     public Result run(Connection connection) {
+        return run(connection, statement -> {
+        });
+    }
+
+    /**
+     * Run the import.
+     *
+     * @param started called with the statement before it runs: it can be canceled from another thread
+     * @return the result; the errors are in the result, not thrown
+     */
+    public Result run(Connection connection, Consumer<Statement> started) {
         try (Statement statement = connection.createStatement()) {
+            started.accept(statement);
             for (String sql : statements()) {
                 statement.execute(sql);
             }
@@ -131,7 +162,7 @@ public final class FileImport {
     /**
      * @return the message of an error: the first one of the chain with a text
      */
-    static String message(Throwable error) {
+    public static String message(Throwable error) {
         for (Throwable e = error; e != null; e = e.getCause() == e ? null : e.getCause()) {
             if (e.getMessage() != null && !e.getMessage().isBlank()) {
                 return e.getMessage().strip();

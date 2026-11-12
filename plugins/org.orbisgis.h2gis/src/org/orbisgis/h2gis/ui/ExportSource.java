@@ -25,6 +25,7 @@ import org.jkiss.dbeaver.model.DBPEvaluationContext;
 import org.jkiss.dbeaver.model.DBUtils;
 import org.jkiss.dbeaver.model.navigator.DBNDatabaseNode;
 import org.jkiss.dbeaver.model.struct.DBSEntity;
+import java.util.function.Predicate;
 
 /**
  * A table (or a view) of an H2GIS connection, selected in the navigator to be exported.
@@ -40,11 +41,19 @@ public record ExportSource(DBPDataSourceContainer container, String name, String
      * @return the table of a selected navigator node, null if it is not a table of an H2GIS connection
      */
     public static ExportSource of(Object element) {
+        return of(element, ImportTarget::isH2GIS);
+    }
+
+    /**
+     * @param accepts the connections accepted (the ones of an engine)
+     * @return the table of a selected navigator node, null if it is not a table of an accepted connection
+     */
+    public static ExportSource of(Object element, Predicate<DBPDataSourceContainer> accepts) {
         if (!(element instanceof DBNDatabaseNode node) || !(node.getObject() instanceof DBSEntity entity)) {
             return null;
         }
         DBPDataSourceContainer container = node.getDataSourceContainer();
-        if (container == null || !ImportTarget.isH2GIS(container)) {
+        if (container == null || !accepts.test(container)) {
             return null;
         }
         return new ExportSource(container, entity.getName(), DBUtils.getObjectFullName(entity, DBPEvaluationContext.DML),
