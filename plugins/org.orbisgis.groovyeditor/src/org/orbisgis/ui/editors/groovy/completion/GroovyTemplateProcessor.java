@@ -27,7 +27,9 @@ import org.eclipse.jface.text.templates.Template;
 import org.eclipse.jface.text.templates.TemplateCompletionProcessor;
 import org.eclipse.jface.text.templates.TemplateContext;
 import org.eclipse.jface.text.templates.TemplateContextType;
+import org.eclipse.jface.text.templates.TemplateProposal;
 import org.eclipse.swt.graphics.Image;
+import org.orbisgis.ui.editors.groovy.ui.Icons;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -67,14 +69,30 @@ public class GroovyTemplateProcessor extends TemplateCompletionProcessor {
      * @return the template proposals for the given position
      */
     public List<ICompletionProposal> computeTemplateProposals(ITextViewer viewer, int offset) {
-        List<ICompletionProposal> proposals = new ArrayList<>();
         String text = viewer.getDocument().get();
-        for (GroovyTemplates.Match match : GroovyTemplates.match(text, offset, at -> receiver.apply(text, at))) {
+        return proposals(viewer, GroovyTemplates.match(text, offset, at -> receiver.apply(text, at)));
+    }
+
+    /**
+     * @param matches templates adapted to a position (Groovy templates, Vega-Lite charts...)
+     * @return their proposals, inserted in the linked mode
+     */
+    public List<ICompletionProposal> proposals(ITextViewer viewer, List<GroovyTemplates.Match> matches) {
+        return proposals(viewer, matches, Icons.COMPLETION_TEMPLATE);
+    }
+
+    /**
+     * @param image icon of the proposals in the list
+     */
+    public List<ICompletionProposal> proposals(ITextViewer viewer, List<GroovyTemplates.Match> matches,
+                                               Image image) {
+        List<ICompletionProposal> proposals = new ArrayList<>();
+        for (GroovyTemplates.Match match : matches) {
             Template template = new Template(match.name(), match.description(), CONTEXT_TYPE_ID, match.pattern(), false);
             IRegion region = new Region(match.replaceOffset(), match.replaceLength());
             TemplateContext context = createContext(viewer, region);
             if (context != null) {
-                proposals.add(createProposal(template, context, region, 90));
+                proposals.add(new TemplateProposal(template, context, region, image, 90));
             }
         }
         return proposals;
@@ -97,6 +115,6 @@ public class GroovyTemplateProcessor extends TemplateCompletionProcessor {
 
     @Override
     protected Image getImage(Template template) {
-        return null;
+        return Icons.COMPLETION_TEMPLATE;
     }
 }

@@ -59,6 +59,9 @@ public final class H2GISMessages extends NLS {
     public static String export_column_file;
     public static String export_replace;
     public static String export_button;
+    public static String view_script_button;
+    public static String import_script_title;
+    public static String export_script_title;
     public static String export_error_folder;
     public static String export_error_name;
     public static String export_error_path;
@@ -81,6 +84,25 @@ public final class H2GISMessages extends NLS {
     public static String result_select;
     public static String import_filter_supported;
     public static String import_filter_all;
+    public static String export_column_rows;
+    public static String export_columns_button;
+    public static String export_all_columns;
+    public static String export_n_columns;
+    public static String export_filtered;
+    public static String export_warning_geometry;
+    public static String columns_title;
+    public static String columns_heading;
+    public static String columns_message;
+    public static String columns_column;
+    public static String columns_type;
+    public static String columns_all;
+    public static String columns_none;
+    public static String columns_filter;
+    public static String columns_filter_tooltip;
+    public static String columns_count;
+    public static String columns_count_result;
+    public static String columns_error_none;
+    public static String columns_warning_geometry;
 
     static {
         NLS.initializeMessages(BUNDLE_NAME, H2GISMessages.class);

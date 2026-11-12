@@ -23,6 +23,7 @@ package org.orbisgis.h2gis.ui;
 import org.eclipse.osgi.util.NLS;
 import org.orbisgis.h2gis.internal.H2GISMessages;
 import org.eclipse.jface.dialogs.IDialogConstants;
+import org.eclipse.jface.dialogs.IMessageProvider;
 import org.eclipse.jface.dialogs.TitleAreaDialog;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.ScrolledComposite;
@@ -58,6 +59,8 @@ public class ExportTablesDialog extends TitleAreaDialog {
 
     private final List<ExportSource> tables;
     private final List<Text> fileNames = new ArrayList<>();
+    private final List<ExportOptions> tableOptions = new ArrayList<>();
+    private final List<Label> optionLabels = new ArrayList<>();
     private Combo format;
     private Text folder;
     private Button overwrite;
@@ -112,14 +115,16 @@ public class ExportTablesDialog extends TitleAreaDialog {
         ScrolledComposite scrolled = new ScrolledComposite(area, SWT.V_SCROLL | SWT.H_SCROLL);
         GridData scrolledData = new GridData(SWT.FILL, SWT.FILL, true, true);
         scrolledData.heightHint = Math.min(360, 40 + 30 * tables.size());
-        scrolledData.widthHint = 600;
+        scrolledData.widthHint = 760;
         scrolled.setLayoutData(scrolledData);
         scrolled.setExpandHorizontal(true);
         scrolled.setExpandVertical(true);
         Composite grid = new Composite(scrolled, SWT.NONE);
-        grid.setLayout(new GridLayout(2, false));
+        grid.setLayout(new GridLayout(4, false));
         new Label(grid, SWT.NONE).setText(H2GISMessages.export_column_table);
         new Label(grid, SWT.NONE).setText(H2GISMessages.export_column_file);
+        new Label(grid, SWT.NONE).setText(H2GISMessages.export_column_rows);
+        new Label(grid, SWT.NONE);
         for (ExportSource table : tables) {
             Label name = new Label(grid, SWT.NONE);
             name.setText(table.name());
@@ -131,6 +136,18 @@ public class ExportTablesDialog extends TitleAreaDialog {
             file.setText(TableExport.defaultFileName(table.name(), lastFormat));
             file.addModifyListener(e -> validate());
             fileNames.add(file);
+
+            int index = tableOptions.size();
+            tableOptions.add(ExportOptions.ALL);
+            Label summary = new Label(grid, SWT.NONE);
+            summary.setText(ExportOptions.ALL.describe());
+            GridData summaryData = new GridData(SWT.FILL, SWT.CENTER, false, false);
+            summaryData.widthHint = 160;
+            summary.setLayoutData(summaryData);
+            optionLabels.add(summary);
+            Button choose = new Button(grid, SWT.PUSH);
+            choose.setText(H2GISMessages.export_columns_button);
+            choose.addListener(SWT.Selection, event -> chooseOptions(index));
         }
         scrolled.setContent(grid);
         scrolled.setMinSize(grid.computeSize(SWT.DEFAULT, SWT.DEFAULT));
@@ -142,9 +159,57 @@ public class ExportTablesDialog extends TitleAreaDialog {
 
     @Override
     protected void createButtonsForButtonBar(Composite parent) {
+        createButton(parent, IDialogConstants.DETAILS_ID, H2GISMessages.view_script_button, false);
         createButton(parent, IDialogConstants.OK_ID, H2GISMessages.export_button, true);
         createButton(parent, IDialogConstants.CANCEL_ID, IDialogConstants.CANCEL_LABEL, false);
         validate();
+    }
+
+    @Override
+    protected void buttonPressed(int buttonId) {
+        if (buttonId == IDialogConstants.DETAILS_ID) {
+            viewScript();
+        } else {
+            super.buttonPressed(buttonId);
+        }
+    }
+
+    /**
+     * Show the SQL statements of the exports; the script window can also run them.
+     */
+    private void viewScript() {
+        List<ExportTablesJob.Item> items = collect();
+        Set<String> connections = new HashSet<>();
+        for (ExportTablesJob.Item item : items) {
+            connections.add(item.source().container().getName());
+        }
+        StringBuilder script = new StringBuilder();
+        for (ExportTablesJob.Item item : items) {
+            TableExport export = item.export();
+            String comment = item.source().name() + " -> " + export.getFile().getAbsolutePath();
+            if (connections.size() > 1) {
+                comment = item.source().container().getName() + " : " + comment;
+            }
+            ScriptViewer.append(script, comment, export.statements());
+        }
+        // Several connections: the script is shown without the dialect of one of them
+        if (ScriptViewer.show(getShell(), connections.size() == 1 ? tables.get(0).container() : null,
+                H2GISMessages.export_script_title, script.toString())) {
+            okPressed();
+        }
+    }
+
+    /**
+     * Choose the columns and the filter of a table.
+     */
+    private void chooseOptions(int index) {
+        ColumnsFilterDialog dialog = new ColumnsFilterDialog(getShell(), tables.get(index), tableOptions.get(index));
+        if (dialog.open() == OK && dialog.getOptions() != null) {
+            tableOptions.set(index, dialog.getOptions());
+            optionLabels.get(index).setText(dialog.getOptions().describe());
+            optionLabels.get(index).setToolTipText(dialog.getOptions().filter());
+            validate();
+        }
     }
 
     private ExportFormat selectedFormat() {
@@ -203,26 +268,53 @@ public class ExportTablesDialog extends TitleAreaDialog {
             }
         }
         setErrorMessage(error);
-        Button ok = getButton(IDialogConstants.OK_ID);
-        if (ok != null) {
-            ok.setEnabled(error == null);
+        // A geographic format without the geometry column of a table: allowed, but probably a mistake
+        String withoutGeometry = null;
+        if (format != null && selectedFormat().isSpatial()) {
+            for (int i = 0; i < tableOptions.size(); i++) {
+                if (!tableOptions.get(i).hasGeometry()) {
+                    withoutGeometry = tables.get(i).name();
+                    break;
+                }
+            }
+        }
+        if (withoutGeometry != null) {
+            setMessage(NLS.bind(H2GISMessages.export_warning_geometry, withoutGeometry), IMessageProvider.WARNING);
+        } else {
+            setMessage(H2GISMessages.export_message);
+        }
+        for (int id : new int[]{IDialogConstants.OK_ID, IDialogConstants.DETAILS_ID}) {
+            Button button = getButton(id);
+            if (button != null) {
+                button.setEnabled(error == null);
+            }
         }
     }
 
     @Override
     protected void okPressed() {
+        exports.clear();
+        exports.addAll(collect());
+        lastFolder = new File(folder.getText().trim()).getAbsolutePath();
+        lastFormat = selectedFormat();
+        super.okPressed();
+    }
+
+    /**
+     * The exports described by the dialog.
+     */
+    private List<ExportTablesJob.Item> collect() {
         ExportFormat selected = selectedFormat();
         File directory = new File(folder.getText().trim());
-        exports.clear();
+        List<ExportTablesJob.Item> list = new ArrayList<>();
         for (int i = 0; i < tables.size(); i++) {
             ExportSource table = tables.get(i);
             File file = new File(directory, fileNames.get(i).getText().trim());
-            exports.add(new ExportTablesJob.Item(table, new TableExport(table.name(), table.reference(), file,
-                    selected, overwrite.getSelection())));
+            ExportOptions chosen = tableOptions.get(i);
+            list.add(new ExportTablesJob.Item(table, new TableExport(table.name(), table.reference(), file,
+                    selected, overwrite.getSelection(), chosen.columns(), chosen.filter())));
         }
-        lastFolder = directory.getAbsolutePath();
-        lastFormat = selected;
-        super.okPressed();
+        return list;
     }
 
     /**

@@ -55,6 +55,8 @@ public final class TableExport {
     private final File file;
     private final ExportFormat format;
     private final boolean overwrite;
+    private final List<String> columns;
+    private final String filter;
 
     /**
      * @param tableName      the name of the table, to show
@@ -64,11 +66,70 @@ public final class TableExport {
      * @param overwrite      true to replace an existing file
      */
     public TableExport(String tableName, String tableReference, File file, ExportFormat format, boolean overwrite) {
+        this(tableName, tableReference, file, format, overwrite, null, null);
+    }
+
+    /**
+     * @param columns the columns to export, as SQL identifiers (quoted if needed); null for all the columns
+     * @param filter  an SQL condition on the rows (without WHERE), null or blank for all the rows
+     */
+    public TableExport(String tableName, String tableReference, File file, ExportFormat format, boolean overwrite,
+                       List<String> columns, String filter) {
         this.tableName = tableName;
         this.tableReference = tableReference;
         this.file = file;
         this.format = format;
         this.overwrite = overwrite;
+        this.columns = columns == null || columns.isEmpty() ? null : List.copyOf(columns);
+        this.filter = cleanFilter(filter);
+    }
+
+    /**
+     * @return a condition without the WHERE keyword nor a final semicolon, null if blank
+     */
+    static String cleanFilter(String filter) {
+        if (filter == null) {
+            return null;
+        }
+        String condition = filter.strip();
+        if (condition.regionMatches(true, 0, "WHERE ", 0, 6)) {
+            condition = condition.substring(6).strip();
+        }
+        while (condition.endsWith(";")) {
+            condition = condition.substring(0, condition.length() - 1).strip();
+        }
+        return condition.isEmpty() ? null : condition;
+    }
+
+    /**
+     * @return the query of the rows exported: SELECT columns FROM table WHERE filter
+     */
+    public String selectQuery() {
+        return "SELECT " + (columns == null ? "*" : String.join(", ", columns)) + " FROM " + tableReference
+                + whereClause();
+    }
+
+    /**
+     * @return what the H2GIS function exports: the table, or the query in parentheses when columns or a filter are
+     * chosen (the H2GIS write functions accept '(SELECT ...)')
+     */
+    public String source() {
+        if (columns == null && filter == null) {
+            return tableReference;
+        }
+        // A new line before the parenthesis: a '--' comment in the filter does not hide it
+        return "(" + selectQuery() + "\n)";
+    }
+
+    private String whereClause() {
+        return filter == null ? "" : " WHERE " + filter;
+    }
+
+    /**
+     * @return the query counting the rows exported
+     */
+    public String countQuery() {
+        return "SELECT COUNT(*) FROM " + tableReference + (filter == null ? "" : " WHERE " + filter + "\n");
     }
 
     public String getTableName() {
@@ -93,11 +154,11 @@ public final class TableExport {
     public List<String> statements() {
         String path = literal(file.getAbsolutePath());
         if (format == ExportFormat.CSV) {
-            return List.of("CALL CSVWRITE(" + path + ", " + literal("SELECT * FROM " + tableReference)
+            return List.of("CALL CSVWRITE(" + path + ", " + literal(selectQuery() + (filter == null ? "" : "\n"))
                     + ", 'charset=UTF-8')");
         }
-        // The table reference is given to H2GIS as a text, which it parses as SQL (quotes kept)
-        return List.of("CALL " + format.getFunction() + "(" + path + ", " + literal(tableReference) + ", "
+        // The table reference (or the query) is given to H2GIS as a text, which it parses as SQL (quotes kept)
+        return List.of("CALL " + format.getFunction() + "(" + path + ", " + literal(source()) + ", "
                 + (overwrite ? "TRUE" : "FALSE") + ")");
     }
 
@@ -119,7 +180,7 @@ public final class TableExport {
                 statement.execute(sql);
             }
             long rows;
-            try (ResultSet count = statement.executeQuery("SELECT COUNT(*) FROM " + tableReference)) {
+            try (ResultSet count = statement.executeQuery(countQuery())) {
                 rows = count.next() ? count.getLong(1) : -1;
             }
             return new Result(tableName, file, rows, null);

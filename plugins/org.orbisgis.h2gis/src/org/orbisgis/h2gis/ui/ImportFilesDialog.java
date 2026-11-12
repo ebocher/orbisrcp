@@ -122,9 +122,34 @@ public class ImportFilesDialog extends TitleAreaDialog {
 
     @Override
     protected void createButtonsForButtonBar(Composite parent) {
+        createButton(parent, IDialogConstants.DETAILS_ID, H2GISMessages.view_script_button, false);
         createButton(parent, IDialogConstants.OK_ID, H2GISMessages.import_button, true);
         createButton(parent, IDialogConstants.CANCEL_ID, IDialogConstants.CANCEL_LABEL, false);
         validate();
+    }
+
+    @Override
+    protected void buttonPressed(int buttonId) {
+        if (buttonId == IDialogConstants.DETAILS_ID) {
+            viewScript();
+        } else {
+            super.buttonPressed(buttonId);
+        }
+    }
+
+    /**
+     * Show the SQL statements of the imports; the script window can also run them.
+     */
+    private void viewScript() {
+        StringBuilder script = new StringBuilder();
+        for (FileImport fileImport : collect()) {
+            ScriptViewer.append(script, fileImport.getFile().getName() + " -> " + fileImport.tableReference(),
+                    fileImport.statements());
+        }
+        if (ScriptViewer.show(getShell(), target.container(), H2GISMessages.import_script_title,
+                script.toString())) {
+            okPressed();
+        }
     }
 
     private static void header(Composite parent, String text) {
@@ -152,25 +177,36 @@ public class ImportFilesDialog extends TitleAreaDialog {
             error = H2GISMessages.import_error_none;
         }
         setErrorMessage(error);
-        Button ok = getButton(IDialogConstants.OK_ID);
-        if (ok != null) {
-            ok.setEnabled(error == null);
+        for (int id : new int[]{IDialogConstants.OK_ID, IDialogConstants.DETAILS_ID}) {
+            Button button = getButton(id);
+            if (button != null) {
+                button.setEnabled(error == null);
+            }
         }
     }
 
     @Override
     protected void okPressed() {
         imports.clear();
+        imports.addAll(collect());
+        super.okPressed();
+    }
+
+    /**
+     * The imports described by the dialog.
+     */
+    private List<FileImport> collect() {
+        List<FileImport> list = new ArrayList<>();
         for (int i = 0; i < files.size(); i++) {
             File file = files.get(i);
             FileFormat format = FileFormat.of(file.getName());
             Text table = tableNames.get(i);
             if (format != null && table.isEnabled() && !table.getText().isBlank()) {
-                imports.add(new FileImport(file, format, target.schema(), table.getText().trim(),
+                list.add(new FileImport(file, format, target.schema(), table.getText().trim(),
                         replace.getSelection()));
             }
         }
-        super.okPressed();
+        return list;
     }
 
     /**

@@ -241,6 +241,26 @@ The Vega-Lite and the Groovy proposals are never mixed, and out of `vegalite(...
 `dbeaver.show`...) there is no Vega-Lite completion. The schema is loaded on the first use (about 3 MB in memory,
 shared by the consoles). The `vegalite` template writes a complete chart.
 
+In an empty specification (`vegalite(|)`, or with only `data` written), `Ctrl+Space` first proposes chart
+templates, then the properties. A template writes the `data`, `mark` and `encoding` of a kind of chart; `Tab` goes
+from a field to the next one (the rows, then the columns), `Enter` ends the edition. Type the beginning of a name to
+choose (`vegalite(h` + `Ctrl+Space` gives `histogram` and `heatmap`).
+
+In the list, the Groovy templates have an orange **T** icon and the chart templates a purple bar chart icon.
+
+| Name | Chart |
+| --- | --- |
+| `bar` | bars: a value per category |
+| `stackedbar` | stacked bars: a value per category and group |
+| `line`, `area` | a value over time |
+| `scatter` | a quantity against another one |
+| `pie` | the shares of the categories |
+| `histogram` | the distribution of a quantity |
+| `heatmap` | a value per pair of categories |
+| `boxplot` | the distribution of a quantity per category |
+| `geomap` | rows with a geometry, colored by a value (longitudes and latitudes) |
+| `geomapxy` | the same in projected coordinates (`projection: [type: "identity", reflectY: true]`) |
+
 Other pages:
 - `dbeaver.html(new File("/tmp/chart.html"))`: an HTML file, for instance written by demat with `toHTML`;
 - `dbeaver.html("<h1>Report</h1>...", "Report")`: HTML content;

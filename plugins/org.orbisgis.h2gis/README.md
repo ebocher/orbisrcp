@@ -63,8 +63,20 @@ without it, the export of that table fails.
 | TSV | `.tsv` (`.tsv.gz` compressed) | `TSVWrite` |
 | CSV | `.csv` (geometries as WKT) | `CSVWRITE` of H2 |
 
+**Columns and filter...** chooses the columns of a table and a condition on its rows (SQL, without `WHERE`), for example
+`POPULATION > 10000 AND ST_Area(THE_GEOM) > 1e6`; *Count the rows* checks the condition before the export. The
+H2GIS function then exports a query: `(SELECT NOM, THE_GEOM FROM PUBLIC.COMMUNES WHERE POPULATION > 10000)`. A
+geographic format (GeoJSON, FlatGeobuf, Shapefile, KML) without the geometry column is allowed, with a warning.
+
 The export runs in the background; a summary gives the rows of each file, or the error of each table which failed.
 The format and the folder are remembered until DBeaver is closed.
+
+## View script
+
+The import and export dialogs have a **View script...** button, as the *Delete* confirmation of DBeaver: it shows the
+SQL statements which will be run, one `CALL` (or `CSVREAD`/`CSVWRITE`) per file, in the SQL viewer of DBeaver. From
+there, *Execute* runs the import or the export (as the button of the dialog), *Copy* copies the script, and *Open in
+SQL editor* opens it in an SQL console to modify it or keep it.
 
 ## Languages
 

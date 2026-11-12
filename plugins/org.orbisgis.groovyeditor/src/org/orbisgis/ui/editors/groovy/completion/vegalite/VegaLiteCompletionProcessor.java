@@ -24,8 +24,10 @@ import org.eclipse.jface.text.contentassist.ICompletionProposal;
 import org.eclipse.jface.text.contentassist.IContentAssistProcessor;
 import org.eclipse.jface.text.contentassist.IContextInformation;
 import org.eclipse.jface.text.contentassist.IContextInformationValidator;
+import org.orbisgis.ui.editors.groovy.completion.GroovyTemplateProcessor;
 import org.orbisgis.ui.editors.groovy.ui.Icons;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -37,6 +39,7 @@ public class VegaLiteCompletionProcessor implements IContentAssistProcessor {
     private static final int MAX_DESCRIPTION = 1500;
 
     private final VegaLiteCompletion completion = new VegaLiteCompletion(VegaLiteSchema::get);
+    private final GroovyTemplateProcessor templates = new GroovyTemplateProcessor();
 
     /**
      * @return the proposals, or null if the position is not in a specification (or is a value written in Groovy)
@@ -46,14 +49,15 @@ public class VegaLiteCompletionProcessor implements IContentAssistProcessor {
         if (suggestions == null) {
             return null;
         }
-        ICompletionProposal[] proposals = new ICompletionProposal[suggestions.size()];
-        for (int i = 0; i < proposals.length; i++) {
-            VegaLiteCompletion.Suggestion s = suggestions.get(i);
+        // In an empty specification, the chart templates first, then the properties
+        List<ICompletionProposal> proposals = new ArrayList<>(
+                templates.proposals(viewer, ChartTemplates.match(viewer.getDocument(), offset), Icons.COMPLETION_CHART));
+        for (VegaLiteCompletion.Suggestion s : suggestions) {
             String display = s.type().isEmpty() ? s.display() : s.display() + " : " + s.type();
-            proposals[i] = new CompletionProposal(s.replacement(), s.offset(), s.length(), s.cursor(),
-                    s.key() ? Icons.COMPLETION_VARIABLE : null, display, null, describe(s.description()));
+            proposals.add(new CompletionProposal(s.replacement(), s.offset(), s.length(), s.cursor(),
+                    s.key() ? Icons.COMPLETION_VARIABLE : null, display, null, describe(s.description())));
         }
-        return proposals;
+        return proposals.toArray(new ICompletionProposal[0]);
     }
 
     private static String describe(String markdown) {

@@ -26,4 +26,10 @@ public class Icons {
             new Image(Display.getDefault(), Icons.class.getClassLoader().getResourceAsStream("icons/completion/method.png"));
     public static Image COMPLETION_VARIABLE =
             new Image(Display.getDefault(), Icons.class.getClassLoader().getResourceAsStream("icons/completion/variable.png"));
+    /** A Groovy template (for, eachRow, vegalite...) */
+    public static Image COMPLETION_TEMPLATE =
+            new Image(Display.getDefault(), Icons.class.getClassLoader().getResourceAsStream("icons/completion/template.png"));
+    /** A chart template of a Vega-Lite specification (bar, line, geomap...) */
+    public static Image COMPLETION_CHART =
+            new Image(Display.getDefault(), Icons.class.getClassLoader().getResourceAsStream("icons/completion/chart.png"));
 }

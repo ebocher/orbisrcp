@@ -32,8 +32,9 @@ import org.jkiss.dbeaver.model.struct.DBSEntity;
  * @param container the connection
  * @param name      the name of the table
  * @param reference the table in SQL, with its catalog/schema and quotes
+ * @param entity    the table, to read its columns
  */
-public record ExportSource(DBPDataSourceContainer container, String name, String reference) {
+public record ExportSource(DBPDataSourceContainer container, String name, String reference, DBSEntity entity) {
 
     /**
      * @return the table of a selected navigator node, null if it is not a table of an H2GIS connection
@@ -46,6 +47,7 @@ public record ExportSource(DBPDataSourceContainer container, String name, String
         if (container == null || !ImportTarget.isH2GIS(container)) {
             return null;
         }
-        return new ExportSource(container, entity.getName(), DBUtils.getObjectFullName(entity, DBPEvaluationContext.DML));
+        return new ExportSource(container, entity.getName(), DBUtils.getObjectFullName(entity, DBPEvaluationContext.DML),
+                entity);
     }
 }

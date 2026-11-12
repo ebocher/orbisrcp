@@ -74,6 +74,13 @@ public enum ExportFormat {
     }
 
     /**
+     * @return true for the formats storing geometries (a geometry column is expected)
+     */
+    public boolean isSpatial() {
+        return this == GEOJSON || this == FLATGEOBUF || this == SHAPEFILE || this == KML;
+    }
+
+    /**
      * @return the label shown in a list: "GeoJSON (.geojson)"
      */
     public String describe() {
